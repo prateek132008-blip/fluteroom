@@ -1282,6 +1282,31 @@ function submitBooking(){
   const dateKey=selectedDate.toDateString();
   if(!bookedSlots[dateKey])bookedSlots[dateKey]=[];
   bookedSlots[dateKey].push(selectedSlot);
+  // Send to Google Apps Script
+const bookingData = {
+  name: name,
+  email: email,
+  phone: phone,
+  date: selectedDate.toLocaleDateString('en-IN'),
+  time: selectedSlot,
+  age: document.getElementById('fage').value,
+  experience: document.getElementById('fexp').value,
+  source: document.getElementById('fsource').value,
+  notes: document.getElementById('fnotes').value
+};
+
+fetch('https://script.google.com/macros/s/AKfycbwQktBhQ0V1g4ECdtZydoRtGyvWsLhtq-Vf6ysIGLCfoRJd3SnZanmrPBJNAg5SCJ3njA/exec', {
+  method: 'POST',
+  body: JSON.stringify(bookingData),
+  headers: { 'Content-Type': 'application/json' }
+})
+.then(r => r.json())
+.then(result => {
+  if (result.meetLink) {
+    document.getElementById('meetLinkDisplay').textContent = result.meetLink;
+  }
+})
+.catch(err => console.log('Booking saved locally', err));
   document.getElementById('bookingForm').style.display='none';
   const succ=document.getElementById('successState');
   succ.classList.add('visible');
