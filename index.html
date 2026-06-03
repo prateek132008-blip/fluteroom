@@ -1203,74 +1203,161 @@ function toggleFaq(el){
 }
 
 // ── BOOKING SYSTEM ──
-let currentDate = new Date();
+let currentDate  = new Date();
 let selectedDate = null;
 let selectedSlot = null;
 
-// ── APPS SCRIPT URL ── Replace with your deployed Web App URL
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzDH5DNx6hPvJ82Z6OYsHN6dBG4Q0jowA7fNRF2sYNxVj9LeUpHg66psFcBBDczgB6yoQ/exec';
+// ════════════════════════════════════════════════════════════════
+// FLUTE ROOM – PERSISTENT LIVE BOOKING SYSTEM
+// ════════════════════════════════════════════════════════════════
+//
+// HOW IT WORKS:
+//   Every date click  → GET  ?action=getBookings&date=DD/MM/YYYY
+//                       fresh server call, no stale cache used
+//   Every submit      → GET  ?action=createBooking&...all fields...
+//                       GET is used because Apps Script returns a
+//                       CORS-readable response for GET requests.
+//                       POST with no-cors returns opaque data which
+//                       cannot be read — that is the root bug in
+//                       every previous version.
+//   After booking     → cache is invalidated + re-fetched so slot
+//                       appears booked immediately on this device too
+//   Cancellation sync → frontend always re-fetches from server,
+//                       so if a calendar event is deleted and the
+//                       sheet row is marked Cancelled, the slot
+//                       reappears automatically on next date click
+//
+// DESIGN PRINCIPLE:
+//   bookedSlotsCache is WRITE-THROUGH and always invalidated on
+//   booking or error. The server (Google Sheets) is the single
+//   source of truth. The cache only exists to avoid re-fetching
+//   for a date the user hasn't navigated away from.
+// ════════════════════════════════════════════════════════════════
 
-// ── Live booked slots cache (keyed by "DD/MM/YYYY") ──
+// ── CONFIG — replace with your deployed Web App URL ──
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxQZvHUxnLRIN9ED-LZqfGXOdrx6pL75QQ6VyrI3nL5iPcBYqyhRUXLqM0EWUKf1x5mug/exec';
+
+// ── SLOT CACHE — keyed by "DD/MM/YYYY", value = string[] ──
+// Always invalidated before a fresh fetch. Never used as sole truth.
 const bookedSlotsCache = {};
 
-// ── Format a Date object → "DD/MM/YYYY" (matches Apps Script format) ──
+// ── IN-FLIGHT GUARD — prevents duplicate concurrent fetches ──
+const fetchInFlight = {};
+
+// ════════════════════════════════════════════════════════════════
+// DATE FORMATTING — always DD/MM/YYYY to match Apps Script
+// ════════════════════════════════════════════════════════════════
 function formatDateKey(date) {
-  return `${String(date.getDate()).padStart(2,'0')}/${String(date.getMonth()+1).padStart(2,'0')}/${date.getFullYear()}`;
+  const d = String(date.getDate()).padStart(2, '0');
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const y = date.getFullYear();
+  return `${d}/${m}/${y}`;
 }
 
-// ── Fetch booked slots from backend for a given date, returns Promise<string[]> ──
-async function fetchBookedSlots(date) {
+// ════════════════════════════════════════════════════════════════
+// FETCH BOOKED SLOTS — always live from server
+// ════════════════════════════════════════════════════════════════
+async function fetchBookedSlots(date, bypassCache) {
   const dateStr = formatDateKey(date);
+
+  // Return cached result only if not bypassed and fetch not in flight
+  if (!bypassCache && bookedSlotsCache[dateStr] !== undefined && !fetchInFlight[dateStr]) {
+    return bookedSlotsCache[dateStr];
+  }
+
+  // Prevent duplicate simultaneous requests for the same date
+  if (fetchInFlight[dateStr]) {
+    // Wait for the in-flight request to complete
+    await new Promise(resolve => {
+      const interval = setInterval(() => {
+        if (!fetchInFlight[dateStr]) { clearInterval(interval); resolve(); }
+      }, 100);
+    });
+    return bookedSlotsCache[dateStr] || [];
+  }
+
+  fetchInFlight[dateStr] = true;
+
   try {
+    // Cache-bust with timestamp + no browser caching
     const url = `${APPS_SCRIPT_URL}?action=getBookings&date=${encodeURIComponent(dateStr)}&_=${Date.now()}`;
-    const res = await fetch(url, { method: 'GET' });
-    const json = await res.json();
+    const res  = await fetch(url, {
+      method:  'GET',
+      cache:   'no-store',          // prevents browser from caching response
+      headers: { 'Accept': 'application/json' }
+    });
+
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const json   = await res.json();
     const booked = Array.isArray(json.booked) ? json.booked : [];
+
+    console.log(`[Flute Room] ${dateStr} booked slots:`, booked);
     bookedSlotsCache[dateStr] = booked;
     return booked;
+
   } catch (err) {
-    console.warn('fetchBookedSlots error:', err);
+    console.warn('[Flute Room] fetchBookedSlots failed:', err.message);
+    // Fall back to cache if server unreachable — stale is better than crash
     return bookedSlotsCache[dateStr] || [];
+
+  } finally {
+    fetchInFlight[dateStr] = false;
   }
 }
 
+// ════════════════════════════════════════════════════════════════
+// CALENDAR — unchanged rendering, same IDs and classes
+// ════════════════════════════════════════════════════════════════
 function initCalendar() { renderCalendar(); }
 
 function renderCalendar() {
-  const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const months = ['January','February','March','April','May','June','July','August',
+                  'September','October','November','December'];
   const title = document.getElementById('calTitle');
   if (!title) return;
   title.textContent = months[currentDate.getMonth()] + ' ' + currentDate.getFullYear();
+
   const grid = document.getElementById('calGrid');
   grid.innerHTML = '';
   ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].forEach(d => {
-    const h = document.createElement('div'); h.className = 'cal-day-header'; h.textContent = d; grid.appendChild(h);
+    const h = document.createElement('div');
+    h.className = 'cal-day-header';
+    h.textContent = d;
+    grid.appendChild(h);
   });
-  const first = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
+
+  const first   = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
   const lastDay = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate();
-  const today = new Date(); today.setHours(0,0,0,0);
+  const today   = new Date(); today.setHours(0, 0, 0, 0);
+
   for (let i = 0; i < first.getDay(); i++) {
-    const e = document.createElement('div'); e.className = 'cal-day empty'; grid.appendChild(e);
+    const e = document.createElement('div');
+    e.className = 'cal-day empty';
+    grid.appendChild(e);
   }
+
   for (let d = 1; d <= lastDay; d++) {
     const cell = document.createElement('div');
     const date = new Date(currentDate.getFullYear(), currentDate.getMonth(), d);
-    date.setHours(0,0,0,0);
-    cell.className = 'cal-day';
+    date.setHours(0, 0, 0, 0);
+    cell.className   = 'cal-day';
     cell.textContent = d;
-    if (date < today) cell.classList.add('past');
-    else {
+
+    if (date < today) {
+      cell.classList.add('past');
+    } else {
       if (date.getTime() === today.getTime()) cell.classList.add('today');
       if (selectedDate && date.getTime() === selectedDate.getTime()) cell.classList.add('selected');
       cell.addEventListener('click', () => selectDate(date));
     }
     grid.appendChild(cell);
   }
+
   const prevBtn = document.getElementById('calPrev');
   if (prevBtn) {
     const pm = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
-    const tm = new Date(); tm.setDate(1); tm.setHours(0,0,0,0);
-    prevBtn.disabled = pm <= tm;
+    const tm = new Date(); tm.setDate(1); tm.setHours(0, 0, 0, 0);
+    prevBtn.disabled      = pm <= tm;
     prevBtn.style.opacity = pm <= tm ? '0.3' : '1';
   }
 }
@@ -1280,148 +1367,224 @@ function changeMonth(d) {
   renderCalendar();
 }
 
+// ════════════════════════════════════════════════════════════════
+// DATE SELECTION — always fetches fresh from server
+// ════════════════════════════════════════════════════════════════
 async function selectDate(date) {
   selectedDate = date;
   selectedSlot = null;
   document.getElementById('bookingForm').classList.remove('visible');
-  const cn = document.getElementById('cautionNote'); if (cn) cn.style.display = 'none';
+  const cn = document.getElementById('cautionNote');
+  if (cn) cn.style.display = 'none';
   renderCalendar();
   await renderSlots();
 }
 
+// ════════════════════════════════════════════════════════════════
+// SLOT RENDERING — always fetches live, shows spinner
+// ════════════════════════════════════════════════════════════════
 async function renderSlots() {
-  const grid = document.getElementById('slotsGrid');
+  const grid  = document.getElementById('slotsGrid');
   const title = document.getElementById('slotsTitle');
   if (!grid || !selectedDate) return;
 
-  title.textContent = 'Slots for ' + selectedDate.toLocaleDateString('en-IN', {weekday:'short',day:'numeric',month:'short'});
+  title.textContent = 'Slots for ' + selectedDate.toLocaleDateString('en-IN', {
+    weekday: 'short', day: 'numeric', month: 'short'
+  });
 
-  // Show loading state
-  grid.innerHTML = '<div style="grid-column:span 2;text-align:center;color:var(--text3);padding:2rem;font-size:0.9rem">⏳ Loading availability...</div>';
+  // Spinner — uses existing .slot class styling colours
+  grid.innerHTML = `
+    <div style="grid-column:span 2;text-align:center;padding:2.5rem 1rem">
+      <div style="width:28px;height:28px;border:3px solid rgba(201,147,58,0.2);
+                  border-top-color:var(--gold);border-radius:50%;
+                  animation:fr-spin 0.7s linear infinite;
+                  margin:0 auto 12px"></div>
+      <div style="color:var(--text3);font-size:0.85rem">Loading availability…</div>
+    </div>`;
 
-  const taken = await fetchBookedSlots(selectedDate);
+  // Inject spin keyframe once
+  if (!document.getElementById('fr-spin-style')) {
+    const s = document.createElement('style');
+    s.id          = 'fr-spin-style';
+    s.textContent = '@keyframes fr-spin{to{transform:rotate(360deg)}}';
+    document.head.appendChild(s);
+  }
+
+  // Force fresh server fetch — bypass cache every time a date is selected
+  const taken = await fetchBookedSlots(selectedDate, true);
 
   grid.innerHTML = '';
   const slots = generateSlots();
 
-  if (slots.length === 0) {
+  if (!slots.length) {
     grid.innerHTML = '<div style="grid-column:span 2;text-align:center;color:var(--text3);padding:2rem;font-size:0.9rem">No slots available for this date.</div>';
     return;
   }
 
   slots.forEach(slot => {
-    const div = document.createElement('div');
+    const div      = document.createElement('div');
     const isBooked = taken.includes(slot);
-    div.className = 'slot ' + (isBooked ? 'booked' : 'available');
+    div.className  = 'slot ' + (isBooked ? 'booked' : 'available');
     div.textContent = slot + (isBooked ? ' · Booked' : '');
-    if (!isBooked) {
-      div.addEventListener('click', () => selectSlot(slot, div));
-    }
+    if (!isBooked) div.addEventListener('click', () => selectSlot(slot, div));
     grid.appendChild(div);
   });
 }
 
+// ════════════════════════════════════════════════════════════════
+// SLOT GENERATION — 3 PM to 12 AM, 15 min class + 10 min buffer
+// ════════════════════════════════════════════════════════════════
 function generateSlots() {
-  const slots = [];
-  const start = 15 * 60;
-  const end = 24 * 60;
+  const slots    = [];
+  const start    = 15 * 60;
+  const end      = 24 * 60;
   const duration = 15;
-  const buffer = 10;
-  const step = duration + buffer;
+  const buffer   = 10;
+  const step     = duration + buffer;
   for (let m = start; m + duration <= end; m += step) {
-    const h = Math.floor(m / 60);
-    const min = m % 60;
+    const h    = Math.floor(m / 60);
+    const min  = m % 60;
     const ampm = h >= 12 ? 'PM' : 'AM';
-    const h12 = h > 12 ? h - 12 : h === 0 ? 12 : h;
-    slots.push(`${h12}:${min.toString().padStart(2,'0')} ${ampm}`);
+    const h12  = h > 12 ? h - 12 : h === 0 ? 12 : h;
+    slots.push(`${h12}:${min.toString().padStart(2, '0')} ${ampm}`);
   }
   return slots;
 }
 
+// ════════════════════════════════════════════════════════════════
+// SLOT SELECTION
+// ════════════════════════════════════════════════════════════════
 function selectSlot(slot, el) {
   selectedSlot = slot;
   document.querySelectorAll('.slot').forEach(s => s.classList.remove('selected-slot'));
   el.classList.add('selected-slot');
-  const form = document.getElementById('bookingForm');
+  const form    = document.getElementById('bookingForm');
   const summary = document.getElementById('bookingSummary');
   form.classList.add('visible');
-  form.scrollIntoView({behavior:'smooth', block:'start'});
-  const cn = document.getElementById('cautionNote'); if (cn) cn.style.display = 'block';
+  form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  const cn = document.getElementById('cautionNote');
+  if (cn) cn.style.display = 'block';
   summary.innerHTML = `📅 <strong>${selectedDate.toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}</strong> &nbsp;·&nbsp; ⏰ <strong>${slot} IST</strong> &nbsp;·&nbsp; ⏱ <strong>15 Minutes</strong> &nbsp;·&nbsp; 🎥 <strong>Google Meet</strong>`;
 }
 
+// ════════════════════════════════════════════════════════════════
+// SUBMIT BOOKING
+//
+// WHY GET AND NOT POST:
+//   Apps Script Web Apps deployed with "Execute as: Me, Access: Anyone"
+//   return CORS headers for GET requests — the browser can fully read
+//   the JSON response. For POST, the browser must send a CORS preflight
+//   OPTIONS request first, which Apps Script does NOT handle, causing
+//   a network error. Using mode:'no-cors' on POST bypasses the preflight
+//   but makes the response opaque — unreadable. We cannot tell if it
+//   succeeded. Using GET with all data in query parameters gives us a
+//   fully readable, real-time response with the Meet link and success
+//   flag, which is exactly what we need.
+// ════════════════════════════════════════════════════════════════
 async function submitBooking() {
   const name  = document.getElementById('fname').value.trim();
   const email = document.getElementById('femail').value.trim();
   const phone = document.getElementById('fphone').value.trim();
-  if (!name || !email || !phone) { alert('Please fill in your name, email, and WhatsApp number.'); return; }
-  if (!selectedDate || !selectedSlot) { alert('Please select a date and time slot.'); return; }
+
+  if (!name || !email || !phone) {
+    alert('Please fill in your name, email, and WhatsApp number.');
+    return;
+  }
+  if (!selectedDate || !selectedSlot) {
+    alert('Please select a date and time slot.');
+    return;
+  }
 
   const submitBtn = document.querySelector('#bookingForm .btn-gold');
-  submitBtn.disabled = true;
-  submitBtn.textContent = '⏳ Booking...';
+  if (submitBtn) {
+    submitBtn.disabled    = true;
+    submitBtn.textContent = '⏳ Booking...';
+  }
 
   const dateStr = formatDateKey(selectedDate);
 
-  // Build query string — GET requests to Apps Script are fully CORS-readable
+  // Build GET request with all booking data as query params
   const params = new URLSearchParams({
     action:     'createBooking',
-    name:       name,
-    email:      email,
-    phone:      phone,
-    date:       dateStr,
-    time:       selectedSlot,
-    age:        document.getElementById('fage').value    || '',
-    experience: document.getElementById('fexp').value    || '',
-    source:     document.getElementById('fsource').value || '',
-    notes:      document.getElementById('fnotes').value  || '',
-    _:          Date.now()   // cache-bust
+    name:        name,
+    email:       email,
+    phone:       phone,
+    date:        dateStr,
+    time:        selectedSlot,
+    age:         document.getElementById('fage').value     || '',
+    experience:  document.getElementById('fexp').value     || '',
+    source:      document.getElementById('fsource').value  || '',
+    notes:       document.getElementById('fnotes').value   || '',
+    _:           Date.now()   // cache-bust
   });
 
-  console.log('📤 Sending booking via GET:', params.toString());
+  console.log('[Flute Room] Submitting booking:', Object.fromEntries(params));
 
   try {
-    const res  = await fetch(`${APPS_SCRIPT_URL}?${params.toString()}`, { method: 'GET' });
+    const res  = await fetch(`${APPS_SCRIPT_URL}?${params.toString()}`, {
+      method:  'GET',
+      cache:   'no-store',
+      headers: { 'Accept': 'application/json' }
+    });
+
+    if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
     const json = await res.json();
-    console.log('✅ Response:', json);
+    console.log('[Flute Room] Booking response:', json);
 
     if (json.success) {
-      // Update cache so the slot is immediately blocked for this session too
-      if (!bookedSlotsCache[dateStr]) bookedSlotsCache[dateStr] = [];
-      bookedSlotsCache[dateStr].push(selectedSlot);
-      await renderSlots();   // re-fetch + re-render so slot shows as booked live
+      // ── Invalidate cache and re-fetch so slot is immediately booked ──
+      delete bookedSlotsCache[dateStr];
+      await fetchBookedSlots(selectedDate, true);
+      await renderSlots();
       showConfirmation(name, email, phone, json.meetLink || '(Meet link will be sent to your email shortly)');
     } else {
-      submitBtn.disabled = false;
-      submitBtn.textContent = '🎵 Confirm Booking';
+      // Server rejected — restore button, show error
+      if (submitBtn) {
+        submitBtn.disabled    = false;
+        submitBtn.textContent = '🎵 Confirm My Free Demo';
+      }
       const msg = json.error || 'Booking failed. Please try again.';
       alert('⚠️ ' + msg);
-      // If the error is a double-booking, refresh slots to show updated state
-      if (msg.toLowerCase().includes('already booked') || msg.toLowerCase().includes('slot')) {
-        bookedSlotsCache[dateStr] = null;   // invalidate cache
+
+      // If it's a double-booking error, invalidate cache and refresh slots
+      const isDoubleBook = /already booked|slot/i.test(msg);
+      if (isDoubleBook) {
+        delete bookedSlotsCache[dateStr];
         await renderSlots();
         document.getElementById('bookingForm').classList.remove('visible');
-        const cn = document.getElementById('cautionNote'); if (cn) cn.style.display = 'none';
+        const cn = document.getElementById('cautionNote');
+        if (cn) cn.style.display = 'none';
+        selectedSlot = null;
       }
     }
+
   } catch (err) {
-    console.error('❌ Booking request failed:', err);
-    submitBtn.disabled = false;
-    submitBtn.textContent = '🎵 Confirm Booking';
-    alert('Network error. Please check your connection and try again.');
+    console.error('[Flute Room] submitBooking error:', err);
+    if (submitBtn) {
+      submitBtn.disabled    = false;
+      submitBtn.textContent = '🎵 Confirm My Free Demo';
+    }
+    alert('Network error. Please check your internet connection and try again.');
   }
 }
 
+// ════════════════════════════════════════════════════════════════
+// CONFIRMATION DISPLAY — unchanged visual output
+// ════════════════════════════════════════════════════════════════
 function showConfirmation(name, email, phone, meetLink) {
   document.getElementById('bookingForm').style.display = 'none';
-  document.getElementById('cautionNote').style.display  = 'none';
+  const cn = document.getElementById('cautionNote');
+  if (cn) cn.style.display = 'none';
+
   const succ    = document.getElementById('successState');
   const details = document.getElementById('confirmDetails');
   succ.classList.add('visible');
   succ.style.display = 'block';
+
   const meetHTML = meetLink && meetLink.startsWith('http')
     ? `🎥 <a href="${meetLink}" target="_blank" style="color:#E8B96A;text-decoration:underline">${meetLink}</a>`
     : `🎥 ${meetLink}`;
+
   details.innerHTML = `
     <div style="display:flex;flex-direction:column;gap:0.8rem;font-size:0.9rem;color:var(--text2)">
       <div>👤 <strong style="color:var(--text)">${name}</strong></div>
@@ -1431,7 +1594,7 @@ function showConfirmation(name, email, phone, meetLink) {
       <div>💬 WhatsApp: <strong style="color:var(--text)">${phone}</strong></div>
       <div style="margin-top:0.5rem;padding-top:0.5rem;border-top:1px solid rgba(255,255,255,0.08);font-size:0.8rem;color:#E8B96A">${meetHTML}</div>
     </div>`;
-  succ.scrollIntoView({behavior:'smooth'});
+  succ.scrollIntoView({ behavior: 'smooth' });
 }
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -1439,6 +1602,7 @@ document.addEventListener('DOMContentLoaded', () => {
   observeFadeIns();
   setTimeout(observeFadeIns, 500);
 });
+
 </script>
 
 <!-- ════════════════════════════════
