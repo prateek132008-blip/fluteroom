@@ -350,7 +350,22 @@
           headers: { "Content-Type": "text/plain;charset=utf-8" },
           body: JSON.stringify(payload),
         });
-        const data = await res.json();
+
+        // Apps Script returns JSON on success, but returns an HTML
+        // page instead if the deployment is misconfigured (e.g. "Who
+        // has access" isn't set to "Anyone", the URL is stale, or the
+        // script itself errored). Reading as text first lets us tell
+        // the difference and show a clear message either way, instead
+        // of a raw "Unexpected token '<'" JSON-parsing crash.
+        const rawText = await res.text();
+        let data;
+        try {
+          data = JSON.parse(rawText);
+        } catch (parseErr) {
+          throw new Error(
+            "Setup issue: the enrollment backend didn't respond correctly (this usually means the Google Apps Script deployment isn't set to \"Anyone\" access, or GOOGLE_SCRIPT_URL in config.js is out of date). Please try again shortly, or contact us on WhatsApp so we don't lose your spot."
+          );
+        }
 
         if (!data || data.status !== "success") {
           throw new Error((data && data.message) || "Could not save your details. Please try again.");
