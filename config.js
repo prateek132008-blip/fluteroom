@@ -27,7 +27,7 @@ const CONFIG = {
   SEATS_TOTAL: 30,
 
   // ---- Meta / Facebook Pixel ----
-  META_PIXEL_ID: "27629504953321020",
+  META_PIXEL_ID: "862067273312459",
 
   // ---- Social embeds ----
   // Paste the Instagram Reel's normal permalink URL here — the one
