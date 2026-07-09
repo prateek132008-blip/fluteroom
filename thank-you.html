@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Almost Done — The Flute Room</title>
+<meta name="description" content="Your flute class enrollment details have been received. Send your payment screenshot on WhatsApp to confirm your seat.">
+<meta name="robots" content="noindex">
+<link rel="canonical" href="__WEBSITE_URL__/thank-you.html">
+<link rel="icon" href="assets/favicon.png" type="image/png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Work+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+
+<script src="config.js"></script>
+<!-- META PIXEL — BASE CODE (see index.html for full comments) -->
+<script>
+!function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;
+n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;
+t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,
+document,'script','https://connect.facebook.net/en_US/fbevents.js');
+fbq('init', CONFIG.META_PIXEL_ID);
+fbq('track', 'PageView');
+// NOTE: Purchase is intentionally never fired on this page — payment
+// is verified manually by the teacher after the WhatsApp screenshot.
+</script>
+<noscript><img height="1" width="1" style="display:none"
+src="https://www.facebook.com/tr?id=862067273312459&ev=PageView&noscript=1"
+/></noscript>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+
+<header class="site-header">
+  <div class="container nav">
+    <a class="brand" href="index.html"><span class="brand-mark">◍</span> The Flute Room</a>
+  </div>
+</header>
+
+<main id="main">
+  <section class="page-hero">
+    <div class="container">
+      <p class="eyebrow" style="color:var(--bamboo-light)">Step 2 of 2</p>
+      <h1>Almost Done — Send Your Payment Screenshot</h1>
+      <p class="lede">Your details have been received. Please send your payment screenshot on WhatsApp to confirm your enrollment.</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="container thankyou-wrap">
+      <p class="eyebrow">Your Lead ID</p>
+      <div class="lead-id-chip" id="lead-id-chip">—</div>
+
+      <div class="payment-card">
+        <p class="fee-line" data-fee-text>₹1499</p>
+        <div class="qr-wrap">
+          <img src="assets/payment-qr.png" alt="Payment QR code for The Flute Room">
+        </div>
+        <p class="upi-id" data-upi-text>your-upi-id@bank</p>
+
+        <a href="#" id="thankyou-whatsapp-btn" class="btn btn-whatsapp btn-block" style="margin-top:1.5rem;">Send Screenshot on WhatsApp</a>
+        <p class="confirm-note">Your seat is confirmed only after payment verification.</p>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="site-footer">
+  <div class="container">
+    <div class="footer-bottom" style="margin-top:0; border-top:none; padding-top:0;">
+      <span>© <span data-year></span> The Flute Room. All rights reserved.</span>
+      <a href="index.html" style="text-decoration:underline;">Back to home</a>
+    </div>
+  </div>
+</footer>
+
+<script src="script.js"></script>
+</body>
+</html>
