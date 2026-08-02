@@ -657,7 +657,15 @@ footer a:hover { color: var(--orange); }
   body { padding-bottom: 74px; }
   .footer-grid { grid-template-columns: 1fr; gap: 30px; }
   .whatsapp-float span.label { display: none; }
-  .whatsapp-float { padding: 14px; border-radius: 50%; }
+  .whatsapp-float {
+    padding: 11px;
+    border-radius: 50%;
+    width: 46px;
+    height: 46px;
+    justify-content: center;
+    bottom: calc(74px + 18px + env(safe-area-inset-bottom, 0px));
+  }
+  .whatsapp-float svg { width: 18px; height: 18px; }
 }
 
 /* Mobile nav drawer */
