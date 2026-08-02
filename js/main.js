@@ -146,6 +146,42 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   });
 
+  /* ============ FLUTE OWNERSHIP + BUDGET (step 3) ============ */
+  const fluteHiddenInput = document.getElementById("hasFlute");
+  const fluteCards = document.querySelectorAll(".flute-select-card");
+  const fluteBudgetWrap = document.getElementById("fluteBudgetWrap");
+  const fluteBudgetSelect = document.getElementById("fluteBudget");
+
+  function setHasFlute(value) {
+    if (!value) return;
+    const card = document.querySelector(`.flute-select-card[data-flute="${value}"]`);
+    if (!card) return;
+
+    fluteCards.forEach(c => { c.classList.remove("active"); c.setAttribute("aria-checked", "false"); });
+    card.classList.add("active");
+    card.setAttribute("aria-checked", "true");
+
+    fluteHiddenInput.value = value;
+    showError("hasFlute", "");
+
+    if (value === "No") {
+      fluteBudgetWrap.classList.add("open");
+      fluteBudgetSelect.setAttribute("required", "required");
+    } else {
+      fluteBudgetWrap.classList.remove("open");
+      fluteBudgetSelect.removeAttribute("required");
+      fluteBudgetSelect.value = "";
+      showError("fluteBudget", "");
+    }
+  }
+
+  fluteCards.forEach(card => {
+    card.addEventListener("click", () => setHasFlute(card.dataset.flute));
+    card.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setHasFlute(card.dataset.flute); }
+    });
+  });
+
   /* ============ ENROLLMENT FORM + VALIDATION ============ */
   const form = document.getElementById("enrollForm");
   const submitBtn = document.getElementById("enrollSubmitBtn");
@@ -162,7 +198,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function validateForm(data) {
     let valid = true;
-    ["fullName", "email", "whatsapp", "age", "level", "slot", "plan", "startDate"].forEach(f => showError(f, ""));
+    ["fullName", "email", "whatsapp", "age", "level", "slot", "plan", "startDate", "hasFlute", "fluteBudget"].forEach(f => showError(f, ""));
 
     if (!data.plan) {
       formStatus.textContent = "Please select a plan above before continuing.";
@@ -174,6 +210,8 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!/^\d{10}$/.test((data.whatsapp || "").replace(/\D/g, "").slice(-10))) { showError("whatsapp", "Please enter a valid 10-digit number."); valid = false; }
     if (!data.age || data.age < 4 || data.age > 90) { showError("age", "Please enter a valid age."); valid = false; }
     if (!data.level) { valid = false; }
+    if (!data.hasFlute) { showError("hasFlute", "Please let us know if you already own a flute."); valid = false; }
+    if (data.hasFlute === "No" && !data.fluteBudget) { showError("fluteBudget", "Please select a budget."); valid = false; }
     if (!data.slot) { valid = false; }
     if (!data.startDate) {
       showError("startDate", "Please choose a start date.");
@@ -195,6 +233,11 @@ document.addEventListener("DOMContentLoaded", () => {
       formStatus.style.color = "#C0392B";
       return;
     }
+
+    // ---- Normalize the flute budget field once, here, so every downstream
+    // consumer (sheet, email, WhatsApp message, success page) reads the same
+    // ready-to-display value without re-deriving it. ----
+    data.fluteBudget = data.hasFlute === "Yes" ? "Already Owns Flute" : (data.fluteBudget || "");
 
     // ---- Fire Lead + InitiateCheckout ONLY here, after the user submits the form ----
     firePixelLead(data);
