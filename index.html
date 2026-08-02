@@ -695,8 +695,38 @@ fbq('track', 'PageView');
         </div>
       </div>
 
-      <!-- STEP 3 — Preferred time + start date -->
-      <div class="step-label">Step 3 · Choose Your Schedule</div>
+      <!-- STEP 3 — Flute ownership + budget -->
+      <div class="step-label">Step 3 · Flute Details</div>
+      <div class="form-field full" style="margin-bottom:10px;">
+        <label>Do you already own a flute?</label>
+      </div>
+      <div class="flute-select-grid" id="fluteSelectGrid" role="radiogroup" aria-label="Do you already own a flute?">
+        <div class="flute-select-card" data-flute="Yes" tabindex="0" role="radio" aria-checked="false">
+          <div class="fsc-name">Yes, I already have a flute.</div>
+        </div>
+        <div class="flute-select-card" data-flute="No" tabindex="0" role="radio" aria-checked="false">
+          <div class="fsc-name">No, I need to purchase one.</div>
+        </div>
+      </div>
+      <input type="hidden" id="hasFlute" name="hasFlute" required>
+      <span class="form-error" data-error-for="hasFlute"></span>
+
+      <div class="flute-budget-wrap" id="fluteBudgetWrap">
+        <div class="form-field full">
+          <label for="fluteBudget">What is your budget for purchasing a flute?</label>
+          <select id="fluteBudget" name="fluteBudget">
+            <option value="">Select budget</option>
+            <option value="₹500 – ₹1000 (Beginner)">₹500 – ₹1000 (Beginner)</option>
+            <option value="₹1000 – ₹1700 (Intermediate)">₹1000 – ₹1700 (Intermediate)</option>
+            <option value="₹1700 – ₹2500 (Professional – Recommended)">₹1700 – ₹2500 (Professional – Recommended)</option>
+          </select>
+          <span class="form-error" data-error-for="fluteBudget"></span>
+        </div>
+        <p class="flute-note">💡 Don't feel pressured to purchase a higher-priced flute. Simply choose the flute that fits your budget. Every student can learn successfully with the right guidance, regardless of the flute they own.</p>
+      </div>
+
+      <!-- STEP 4 — Preferred time + start date -->
+      <div class="step-label">Step 4 · Choose Your Schedule</div>
       <div class="form-row">
         <div class="form-field">
           <label for="slot">Preferred Time Slot</label>
@@ -717,8 +747,8 @@ fbq('track', 'PageView');
         </div>
       </div>
 
-      <!-- STEP 4 — Review + pay -->
-      <div class="step-label">Step 4 · Review &amp; Pay</div>
+      <!-- STEP 5 — Review + pay -->
+      <div class="step-label">Step 5 · Review &amp; Pay</div>
       <button type="submit" class="btn btn-primary btn-block" id="enrollSubmitBtn">Proceed to Payment</button>
       <div class="form-status" id="formStatus"></div>
       <p style="font-size:12px;color:var(--ink-soft);text-align:center;margin-top:14px;">
