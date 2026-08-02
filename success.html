@@ -79,11 +79,13 @@ document.addEventListener("DOMContentLoaded", () => {
     <div><span>Plan</span><strong>${data.plan}</strong></div>
     <div><span>Time Slot</span><strong>${data.slot}</strong></div>
     <div><span>Start Date</span><strong>${data.startDate}</strong></div>
+    <div><span>Has Flute</span><strong>${data.hasFlute}</strong></div>
+    <div><span>Flute Budget</span><strong>${data.fluteBudget}</strong></div>
     <div><span>Payment ID</span><strong>${data.paymentId}</strong></div>
   `;
 
   document.getElementById("sendToWhatsapp").addEventListener("click", () => {
-    const msg = `Hi! Here are my enrollment details:%0A%0AName: ${data.fullName}%0AStudent Code: ${data.studentCode}%0AEmail: ${data.email}%0APhone: ${data.whatsapp}%0APlaying Level: ${data.level}%0APlan: ${data.plan}%0APreferred Time: ${data.slot}%0AStart Date: ${data.startDate}%0APayment ID: ${data.paymentId}`;
+    const msg = `Hi! Here are my enrollment details:%0A%0AName: ${data.fullName}%0AStudent Code: ${data.studentCode}%0AEmail: ${data.email}%0APhone: ${data.whatsapp}%0APlaying Level: ${data.level}%0APlan: ${data.plan}%0APreferred Time: ${data.slot}%0AStart Date: ${data.startDate}%0AHas Flute: ${data.hasFlute}%0AFlute Budget: ${data.fluteBudget}%0APayment ID: ${data.paymentId}`;
     window.open(`https://wa.me/${SITE_CONFIG.WHATSAPP_NUMBER}?text=${msg}`, "_blank");
   });
 
