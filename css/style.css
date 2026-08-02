@@ -627,6 +627,35 @@ footer a:hover { color: var(--orange); }
 }
 .step-label:first-child { margin-top: 0; }
 
+/* ===== Enrollment: flute ownership + budget (step 3) ===== */
+.flute-select-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; margin-bottom: 8px; }
+.flute-select-card {
+  border: 1.5px solid var(--line);
+  border-radius: 12px;
+  padding: 16px;
+  text-align: center;
+  cursor: pointer;
+  background: var(--cream);
+  font-weight: 600;
+  font-size: 14.5px;
+  transition: border-color 0.2s ease, background 0.2s ease, transform 0.2s ease;
+}
+.flute-select-card:hover { transform: translateY(-2px); }
+.flute-select-card.active { border-color: var(--orange); background: var(--orange-wash); box-shadow: 0 6px 16px rgba(255,122,0,0.15); }
+.flute-budget-wrap {
+  max-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  margin-bottom: 0;
+  transition: max-height 0.4s var(--ease), opacity 0.3s ease, margin-bottom 0.3s ease;
+}
+.flute-budget-wrap.open { max-height: 320px; opacity: 1; margin-bottom: 20px; }
+.flute-note {
+  font-size: 13px; color: var(--ink-soft);
+  background: var(--orange-wash); border: 1px dashed var(--orange);
+  border-radius: 10px; padding: 12px 14px; margin-top: 10px;
+}
+
 /* ===== Utility ===== */
 .text-center { text-align: center; }
 .mt-24 { margin-top: 24px; }
@@ -635,6 +664,7 @@ footer a:hover { color: var(--orange); }
 @media (max-width: 980px) {
   .hero .container, .why-grid, .teacher-grid, .trust-cert-grid { grid-template-columns: 1fr; }
   .plan-select-grid { grid-template-columns: 1fr; }
+  .flute-select-grid { grid-template-columns: 1fr; }
   .hero-media { order: -1; }
   .benefit-grid { grid-template-columns: repeat(2, 1fr); }
   .pricing-grid { grid-template-columns: 1fr; }
