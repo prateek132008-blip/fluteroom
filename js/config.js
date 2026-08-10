@@ -54,7 +54,7 @@ const SITE_CONFIG = {
   VIDEOS: {
     heroPreview: "AzY2lKqi5Cg",
     unlimitedExplainer: "09Jd_JdHhWM",
-    demoClass: "fw7-BRoWML4",
+    demoClass: "U7h_oqgKhxM",
     testimonial1: "dQw4w9WgXcQ",
     testimonial2: "dQw4w9WgXcQ"
   }
