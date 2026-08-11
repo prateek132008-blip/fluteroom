@@ -676,8 +676,43 @@ footer a:hover { color: var(--orange); }
 }
 
 @media (max-width: 760px) {
-  .nav-links, .header-cta .btn-outline { display: none; }
-  .nav-toggle { display: block; }
+  .nav-links,
+  .header-cta .btn-outline {
+    display: none;
+  }
+
+  .nav-toggle {
+    display: block;
+    flex-shrink: 0;
+    padding: 5px;
+  }
+
+  /* Mobile header — prevent logo wrapping */
+  .site-header .container {
+    padding-left: 16px;
+    padding-right: 16px;
+    gap: 10px;
+  }
+
+  .site-header .logo {
+    font-size: 19px;
+    line-height: 1.05;
+    white-space: nowrap;
+    flex-shrink: 1;
+    min-width: 0;
+  }
+
+  .site-header .header-cta {
+    gap: 8px;
+    flex-shrink: 0;
+  }
+
+  /* Keep the eBook CTA visible without squeezing the logo */
+  .site-header .header-cta .btn-primary {
+    padding: 11px 16px;
+    font-size: 13px;
+  }
+
   section { padding: 76px 0; }
   .hero { padding: 120px 0 90px; }
   .benefit-grid, .steps-grid { grid-template-columns: 1fr; }
@@ -686,7 +721,11 @@ footer a:hover { color: var(--orange); }
   .sticky-cta { display: flex; }
   body { padding-bottom: 74px; }
   .footer-grid { grid-template-columns: 1fr; gap: 30px; }
-  .whatsapp-float span.label { display: none; }
+
+  .whatsapp-float span.label {
+    display: none;
+  }
+
   .whatsapp-float {
     padding: 11px;
     border-radius: 50%;
@@ -695,7 +734,41 @@ footer a:hover { color: var(--orange); }
     justify-content: center;
     bottom: calc(74px + 18px + env(safe-area-inset-bottom, 0px));
   }
-  .whatsapp-float svg { width: 18px; height: 18px; }
+
+  .whatsapp-float svg {
+    width: 18px;
+    height: 18px;
+  }
+}
+
+/* Extra-small phones */
+@media (max-width: 380px) {
+  .site-header .container {
+    padding-left: 12px;
+    padding-right: 12px;
+    gap: 6px;
+  }
+
+  .site-header .logo {
+    font-size: 18px;
+  }
+
+  .site-header .header-cta {
+    gap: 5px;
+  }
+
+  .site-header .header-cta .btn-primary {
+    padding: 10px 12px;
+    font-size: 12px;
+  }
+
+  .site-header .nav-toggle {
+    padding: 4px;
+  }
+
+  .site-header .nav-toggle span {
+    width: 22px;
+  }
 }
 
 /* Mobile nav drawer */
