@@ -146,6 +146,16 @@ document.addEventListener("DOMContentLoaded", () => {
      enrollment flow's tfr_purchase_fired_, so the two can never collide. */
   const firedKey = "tfr_ebook_purchase_fired_" + data.paymentId;
   if (!localStorage.getItem(firedKey) && typeof fbq === "function") {
+    // ---- Advanced Matching (new): attach the customer's plain-text info so
+    // fbevents.js hashes + includes it with this Purchase event, raising EMQ.
+    // Nothing raw/hashed is sent to Meta by our own code — the Pixel does it.
+    const nameParts = (data.fullName || "").trim().split(/\s+/);
+    fbq("set", "userData", {
+      em: data.email,
+      ph: data.whatsapp,
+      fn: nameParts[0] || "",
+      ln: nameParts.slice(1).join(" ") || ""
+    });
     fbq("track", "Purchase", {
       value: data.amount,
       currency: "INR",
