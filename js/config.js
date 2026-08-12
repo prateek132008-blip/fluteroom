@@ -15,7 +15,7 @@ const SITE_CONFIG = {
   // PUBLIC key only. NEVER put your Razorpay Key Secret or Webhook Secret in
   // this file or anywhere in the front-end code — those live only inside the
   // Google Apps Script "Script Properties" (server-side). See README → RAZORPAY SETUP.
-  RAZORPAY_KEY_ID: "rzp_live_Sczvk68iCuryMo", // e.g. "rzp_test_SdLEnL0lYIFFpw"
+  RAZORPAY_KEY_ID: "rzp_test_SdLEnL0lYIFFpw", // e.g. "rzp_test_SdLEnL0lYIFFpw"
 
   // ---- Business details shown on the Razorpay checkout popup ----
   BUSINESS_NAME: "The Flute Room",
