@@ -196,6 +196,27 @@ document.addEventListener("DOMContentLoaded", () => {
     if (el) el.textContent = message || "";
   }
 
+  /* ============ META EMQ HELPERS (new) ============
+     Same helpers as js/ebook.js — reads the Pixel's own _fbp/_fbc cookies (or
+     derives _fbc from ?fbclid= per Meta's documented format) and splits the
+     name field for Advanced Matching / Conversions API. Pure helpers. */
+  function getCookie(name) {
+    const match = document.cookie.match(new RegExp("(^| )" + name + "=([^;]+)"));
+    return match ? decodeURIComponent(match[2]) : "";
+  }
+  function getFbc() {
+    const existing = getCookie("_fbc");
+    if (existing) return existing;
+    const params = new URLSearchParams(window.location.search);
+    const fbclid = params.get("fbclid");
+    if (!fbclid) return "";
+    return `fb.1.${Date.now()}.${fbclid}`;
+  }
+  function splitName(fullName) {
+    const parts = (fullName || "").trim().split(/\s+/);
+    return { firstName: parts[0] || "", lastName: parts.slice(1).join(" ") || "" };
+  }
+
   function validateForm(data) {
     let valid = true;
     ["fullName", "email", "whatsapp", "age", "level", "slot", "plan", "startDate", "hasFlute", "fluteBudget"].forEach(f => showError(f, ""));
@@ -239,6 +260,15 @@ document.addEventListener("DOMContentLoaded", () => {
     // ready-to-display value without re-deriving it. ----
     data.fluteBudget = data.hasFlute === "Yes" ? "Already Owns Flute" : (data.fluteBudget || "");
 
+    // ---- Advanced Matching: give the Pixel the customer's plain-text info so it
+    // can hash + attach it to every subsequent event on this page (raises EMQ).
+    // fbevents.js hashes these values client-side — nothing raw or hashed is
+    // sent to Meta by our own code here. ----
+    const { firstName, lastName } = splitName(data.fullName);
+    if (typeof fbq === "function") {
+      fbq("set", "userData", { em: data.email, ph: data.whatsapp, fn: firstName, ln: lastName });
+    }
+
     // ---- Fire Lead + InitiateCheckout ONLY here, after the user submits the form ----
     firePixelLead(data);
     firePixelInitiateCheckout(data);
@@ -247,13 +277,20 @@ document.addEventListener("DOMContentLoaded", () => {
     submitBtn.textContent = "Preparing payment...";
     formStatus.textContent = "";
 
+    // Capture the Meta browser/click IDs now, before payment, so the same
+    // values can be saved to the sheet AND passed through to Razorpay's
+    // "notes" for the webhook-side Conversions API Purchase call later.
+    const fbp = getCookie("_fbp");
+    const fbc = getFbc();
+    const userAgent = navigator.userAgent;
+
     try {
       // 1. Save a "pending" row to the Google Sheet BEFORE opening Razorpay,
       //    so we never lose a lead even if the user closes the payment popup.
-      await saveToSheet({ ...data, paymentStatus: "Pending", paymentId: "", studentCode: "" });
+      await saveToSheet({ ...data, paymentStatus: "Pending", paymentId: "", studentCode: "", fbp, fbc, userAgent });
 
       // 2. Open Razorpay checkout
-      openRazorpayCheckout(data);
+      openRazorpayCheckout(data, { fbp, fbc, userAgent });
     } catch (err) {
       console.error(err);
       formStatus.textContent = "Something went wrong. Please try again or contact support.";
@@ -264,7 +301,8 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   /* ============ 3. RAZORPAY CHECKOUT ============ */
-  function openRazorpayCheckout(data) {
+  function openRazorpayCheckout(data, meta) {
+    const { fbp, fbc, userAgent } = meta;
     const planInfo = SITE_CONFIG.PLANS[data.plan];
     if (!planInfo) {
       formStatus.textContent = "Invalid plan selected.";
@@ -288,7 +326,12 @@ document.addEventListener("DOMContentLoaded", () => {
       notes: {
         plan: data.plan,
         level: data.level,
-        slot: data.slot
+        slot: data.slot,
+        // fbp/fbc travel with the Razorpay payment so the server-side webhook
+        // (source of truth for "paid") can send a matching Conversions API
+        // Purchase event with these same browser IDs.
+        fbp: fbp || "",
+        fbc: fbc || ""
       },
       theme: { color: "#FF7A00" },
 
@@ -305,7 +348,8 @@ document.addEventListener("DOMContentLoaded", () => {
             ...data,
             paymentStatus: "Paid",
             paymentId: response.razorpay_payment_id,
-            studentCode
+            studentCode,
+            fbp, fbc, userAgent
           });
 
           const successPayload = {
