@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>30 Alankaras for Flute — eBook (₹399, Lifetime Access) | The Flute Room</title>
+<meta name="description" content="A structured 30-alankara eBook for flute learners — build ear training, swar identification, and finger speed. ₹399, instant digital access, lifetime.">
+
+<!-- ============ SEO / Open Graph (new — only for this page) ============ -->
+<meta property="og:title" content="30 Alankaras for Flute — eBook | The Flute Room">
+<meta property="og:description" content="Structured alankara exercises to build ear training, swar identification and finger speed on the flute. ₹399 · Lifetime Access.">
+<meta property="og:type" content="product">
+<meta name="theme-color" content="#FF7A00">
+<link rel="canonical" href="https://www.example.com/alankaars-ebook.html">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="css/style.css">
+
+<!-- ============ CONFIG ============ -->
+<script src="js/config.js" defer></script>
+
+<!-- ============ META PIXEL BASE CODE ============
+     Reuses the SAME Pixel ID as every other page on the site.
+     Only base pixel + PageView here. Lead / InitiateCheckout fire from
+     js/ebook.js at the correct moments; Purchase fires once on ebook-success.html. -->
+<script>
+!function(f,b,e,v,n,t,s)
+{if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+n.queue=[];t=b.createElement(e);t.async=!0;
+t.src=v;s=b.getElementsByTagName(e)[0];
+s.parentNode.insertBefore(t,s)}(window, document,'script',
+'https://connect.facebook.net/en_US/fbevents.js');
+fbq('init', '27629504953321020');
+fbq('track', 'PageView');
+</script>
+<noscript><img height="1" width="1" style="display:none" src="https://www.facebook.com/tr?id=27629504953321020&ev=PageView&noscript=1" /></noscript>
+
+<!-- ============ PAGE-SCOPED STYLES (same pattern as policies/*.html) ============
+     Reuses every existing CSS variable, font, radius, shadow and button class.
+     Only adds the handful of rules unique to a book-style product page. -->
+<style>
+  .ebook-hero { padding: 150px 0 90px; overflow: hidden; }
+  .ebook-hero .container { display: grid; grid-template-columns: 0.85fr 1.15fr; gap: 56px; align-items: center; }
+  .ebook-hero-copy .eyebrow { margin-bottom: 16px; }
+  .ebook-hero-copy h1 { font-size: clamp(30px, 4vw, 46px); margin-bottom: 16px; }
+  .ebook-hero-copy p.lede { font-size: 17px; color: var(--ink-soft); max-width: 480px; margin-bottom: 26px; }
+  .ebook-price-row { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; margin-bottom: 26px; }
+  .ebook-price { font-family: var(--font-display); font-size: 40px; font-weight: 700; color: var(--ink); }
+  .ebook-access-pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--orange-wash); color: var(--orange-deep);
+    font-size: 12.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;
+    padding: 7px 14px; border-radius: 100px;
+  }
+  .ebook-trust { display: flex; gap: 18px; flex-wrap: wrap; font-size: 13.5px; color: var(--ink-soft); margin-top: 22px; }
+  .ebook-trust span { display: flex; align-items: center; gap: 7px; }
+  .ebook-trust svg { color: var(--orange); flex-shrink: 0; }
+
+  /* ---- Book showcase (transparent cover PNG — continuously floats above a
+     grounded contact shadow that breathes in sync, like the box is hovering
+     just above a surface, plus a faint ambient glow for depth) ---- */
+  .ebook-showcase { display: flex; justify-content: center; align-items: center; position: relative; padding: 20px 20px 40px; }
+  .ebook-showcase::before {
+    content: "";
+    position: absolute; inset: 6% 12% 14%;
+    background: radial-gradient(closest-side, rgba(255,122,0,0.18), transparent 72%);
+    filter: blur(30px);
+    z-index: 0;
+  }
+  .ebook-cover-frame {
+    position: relative; z-index: 2;
+    max-width: 380px; width: 100%;
+    animation: ebook-float 4.5s ease-in-out infinite;
+  }
+  .ebook-cover-frame img {
+    width: 100%; display: block;
+    filter: drop-shadow(0 22px 18px rgba(17,17,17,0.25)) drop-shadow(0 6px 8px rgba(17,17,17,0.18));
+  }
+  /* ---- Ground contact shadow — a separate, anchored ellipse (does NOT float
+     with the box) that breathes wider/darker as the box dips closer to it ---- */
+  .ebook-ground-shadow {
+    position: absolute; z-index: 1;
+    left: 50%; bottom: 26px;
+    transform: translateX(-50%);
+    width: 46%; height: 20px;
+    background: radial-gradient(closest-side, rgba(17,17,17,0.32), transparent 75%);
+    filter: blur(7px);
+    border-radius: 50%;
+    animation: ebook-shadow-breathe 4.5s ease-in-out infinite;
+  }
+  @keyframes ebook-float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-16px); }
+  }
+  @keyframes ebook-shadow-breathe {
+    0%, 100% { width: 46%; opacity: 0.9; }
+    50% { width: 36%; opacity: 0.5; }
+  }
+
+  /* ---- Benefits grid (reuses .benefit-card styling, custom column count) ---- */
+  .ebook-benefit-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
+  @media (max-width: 980px) { .ebook-benefit-grid { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 640px) { .ebook-benefit-grid { grid-template-columns: 1fr; } }
+
+  /* ---- Product info list ---- */
+  .ebook-info-card {
+    background: var(--white); border: 1.5px solid var(--line); border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-soft); padding: 40px; max-width: 640px; margin: 0 auto;
+  }
+  .ebook-info-list { list-style: none; display: flex; flex-direction: column; gap: 14px; }
+  .ebook-info-list li { display: flex; align-items: flex-start; gap: 10px; font-size: 15px; color: var(--ink-soft); }
+  .ebook-info-list li strong { color: var(--ink); }
+  .ebook-info-list li svg { color: var(--orange); flex-shrink: 0; margin-top: 3px; }
+
+  /* ---- Checkout card ---- */
+  .ebook-checkout-summary {
+    display: flex; align-items: center; justify-content: space-between; gap: 14px;
+    background: var(--orange-wash); border-radius: 12px; padding: 18px 20px; margin-bottom: 26px; flex-wrap: wrap;
+  }
+  .ebook-checkout-summary strong { font-family: var(--font-display); font-size: 22px; }
+
+  @media (max-width: 980px) {
+    .ebook-hero .container { grid-template-columns: 1fr; }
+    .ebook-showcase { order: -1; }
+  }
+
+  /* ---- What is Alankaar? (reuses .why-grid / .why-list / .why-item / .why-num
+     from css/style.css — same components as the "Why Unlimited" section on the
+     homepage, just new copy) ---- */
+  #what-is-alankaar .why-grid { padding-top: 90px; }
+
+  /* ---- eBook Preview (new — view-only page viewer) ---- */
+  .ebook-preview-card {
+    background: var(--white); border: 1.5px solid var(--line); border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-soft); padding: 32px; max-width: 520px; margin: 0 auto; text-align: center;
+  }
+  .ebook-preview-viewer {
+    position: relative; border-radius: var(--radius); overflow: hidden;
+    border: 1px solid var(--line); background: var(--cream);
+  }
+  .ebook-preview-viewer img {
+    position: relative; z-index: 0;
+    width: 100%; display: block;
+    user-select: none; -webkit-user-select: none;
+    pointer-events: none; /* discourages right-click save / drag-out on most browsers */
+  }
+  /* ---- Tiled "PREVIEW" watermark over the page image (CSS overlay, not
+     baked into the image file — repeats automatically at any page height) ---- */
+  .ebook-preview-watermark {
+    position: absolute; inset: 0; z-index: 1; pointer-events: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='170' height='110'%3E%3Ctext x='-6' y='68' font-family='Inter, sans-serif' font-size='19' font-weight='700' fill='rgba(17,17,17,0.15)' transform='rotate(-28 85 55)'%3EPREVIEW%3C/text%3E%3C/svg%3E");
+    background-repeat: repeat;
+  }
+  .ebook-preview-watermark.is-hidden { display: none; }
+  .ebook-preview-badge {
+    position: absolute; top: 12px; left: 12px; z-index: 2;
+    background: var(--orange); color: #fff; font-size: 11px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.06em; padding: 5px 11px; border-radius: 100px;
+  }
+  .ebook-preview-nav { display: flex; align-items: center; justify-content: center; gap: 16px; margin-top: 18px; }
+  .ebook-preview-nav .slider-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+  .ebook-preview-nav .slider-btn:disabled:hover { background: var(--white); border-color: var(--line); }
+  .ebook-preview-counter { font-size: 14px; font-weight: 600; color: var(--ink-soft); min-width: 54px; }
+  .ebook-preview-note { margin-top: 14px; font-size: 12.5px; color: var(--ink-soft); }
+
+  @media (max-width: 430px) {
+    .ebook-preview-card { padding: 22px 18px; }
+  }
+
+  /* ---- Student Reviews (reuses .review-card / .stars / .review-person /
+     .review-avatar from css/style.css — same components as the homepage
+     reviews section, just laid out as a static grid instead of a scroll-track
+     since there are fewer cards here) ---- */
+  .ebook-review-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; }
+  @media (max-width: 980px) { .ebook-review-grid { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 640px) { .ebook-review-grid { grid-template-columns: 1fr; } }
+  .ebook-review-grid .review-card { min-width: 0; width: 100%; }
+</style>
+</head>
+<body>
+
+<!-- ============================= HEADER (identical to index.html) ============================= -->
+<header class="site-header" id="siteHeader">
+  <div class="container">
+    <a href="index.html" class="logo">The Flute <span>Room</span></a>
+    <nav class="nav-links">
+      <a href="index.html#benefits">Why Us</a>
+      <a href="index.html#curriculum">Curriculum</a>
+      <a href="index.html#pricing">Classes</a>
+      <a href="alankaars-ebook.html">eBook</a>
+      <a href="index.html#reviews">Reviews</a>
+      <a href="index.html#faq">FAQ</a>
+    </nav>
+    <div class="header-cta">
+      <a href="index.html#enroll" class="btn btn-outline">Flute Classes</a>
+      <a href="#buy" class="btn btn-primary">Get the eBook</a>
+      <button class="nav-toggle" id="navToggle" aria-label="Open menu">
+        <span></span><span></span><span></span>
+      </button>
+    </div>
+  </div>
+</header>
+
+<div class="mobile-drawer" id="mobileDrawer">
+  <button class="drawer-close" id="drawerClose" aria-label="Close menu">&times;</button>
+  <a href="index.html#benefits">Why Us</a>
+  <a href="index.html#curriculum">Curriculum</a>
+  <a href="index.html#pricing">Classes</a>
+  <a href="alankaars-ebook.html">eBook</a>
+  <a href="index.html#reviews">Reviews</a>
+  <a href="index.html#faq">FAQ</a>
+  <a href="#buy" class="btn btn-primary btn-block">Get the eBook</a>
+</div>
+
+<!-- ============================= EBOOK HERO ============================= -->
+<section class="ebook-hero">
+  <div class="container">
+    <div class="ebook-hero-copy reveal">
+      <div class="eyebrow">Digital eBook · Flute Practice</div>
+      <h1>30 Alankaras for Flute</h1>
+      <p class="lede">Build stronger fundamentals. Train your ears. Improve your swar identification and finger speed — with 30 structured alankara exercises you can practice at your own pace.</p>
+
+      <div class="ebook-price-row">
+        <div class="ebook-price" data-ebook-price>₹399</div>
+        <span class="ebook-access-pill">🔒 Lifetime Access</span>
+      </div>
+
+      <div class="hero-actions">
+        <a href="#buy" class="btn btn-primary">Get the eBook — <span data-ebook-price>₹399</span></a>
+        <a href="#benefits-ebook" class="btn btn-outline">See What's Inside</a>
+      </div>
+
+      <div class="ebook-trust">
+        <span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>Instant access after payment</span>
+        <span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>Digital PDF, downloadable</span>
+        <span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>No shipping needed</span>
+      </div>
+    </div>
+
+    <div class="ebook-showcase reveal">
+      <div class="ebook-cover-frame">
+        <img id="ebookCoverImg" src="assets/alankaars-ebook-cover.png" alt="30 Alankaras for Flute — eBook cover by The Flute Room">
+      </div>
+      <div class="ebook-ground-shadow" aria-hidden="true"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================= WHAT IS ALANKAAR? (new) =============================
+     Reuses the existing .why-grid / .why-list / .why-item / .why-num components
+     (already defined in css/style.css, same as the homepage's "Why Unlimited"
+     section) — no new component styling, just new copy. -->
+<section id="what-is-alankaar">
+  <div class="container why-grid">
+    <div class="reveal">
+      <div class="eyebrow">Getting Started</div>
+      <h2>What is an Alankaar?</h2>
+      <p style="color:var(--ink-soft); margin-top:10px;">
+        An alankaar is a structured sequence of swars (notes) that you practice repeatedly on your flute. Instead of jumping straight into songs, alankaars give you a simple, repeatable pattern to train your fingers and ears together, one step at a time.
+      </p>
+      <p style="color:var(--ink-soft); margin-top:14px;">
+        <strong>30 Alankaras for Flute</strong> brings together 30 such patterns that you can practice progressively, alongside your regular flute practice.
+      </p>
+    </div>
+
+    <div class="why-list reveal-stagger">
+      <div class="why-item">
+        <span class="why-num">01</span>
+        <div>
+          <h4>Finger Coordination &amp; Speed</h4>
+          <p>Repeating a pattern helps build the muscle memory behind smoother, more confident finger movement over time.</p>
+        </div>
+      </div>
+      <div class="why-item">
+        <span class="why-num">02</span>
+        <div>
+          <h4>Smoother Swar Transitions</h4>
+          <p>Regular practice helps your fingers move between notes with less hesitation and more control.</p>
+        </div>
+      </div>
+      <div class="why-item">
+        <span class="why-num">03</span>
+        <div>
+          <h4>Ear Training &amp; Swar Identification</h4>
+          <p>Playing the same patterns often trains your ear to recognize swars, an important part of overall musical understanding.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================= WHAT IT HELPS YOU DEVELOP ============================= -->
+<section class="alt" id="benefits-ebook">
+  <div class="container">
+    <div class="section-head center reveal" style="margin-left:auto;margin-right:auto;">
+      <div class="eyebrow">What You'll Develop</div>
+      <h2>Master the exercises that build real flute control</h2>
+      <p>With 30 structured alankaras, you'll build the fundamentals that make everything else on the flute easier.</p>
+    </div>
+    <div class="ebook-benefit-grid reveal-stagger">
+      <div class="benefit-card">
+        <div class="benefit-icon">🎵</div>
+        <h3>Play Songs by Listening</h3>
+        <p>Train your musical ear so you can listen to a song and gradually work out the notes, instead of depending entirely on written notation.</p>
+      </div>
+      <div class="benefit-card">
+        <div class="benefit-icon">👂</div>
+        <h3>Ear Training</h3>
+        <p>Develop your ability to hear and recognize musical patterns and notes with regular, structured practice.</p>
+      </div>
+      <div class="benefit-card">
+        <div class="benefit-icon">🎯</div>
+        <h3>Swar Identification</h3>
+        <p>Improve your ability to identify swars accurately while listening to music, a core skill for every flute player.</p>
+      </div>
+      <div class="benefit-card">
+        <div class="benefit-icon">⚡</div>
+        <h3>Increased Finger Speed</h3>
+        <p>The structured alankara exercises help develop smoother, faster, and more confident finger movement.</p>
+      </div>
+      <div class="benefit-card">
+        <div class="benefit-icon">🎶</div>
+        <h3>Stronger Musical Foundation</h3>
+        <p>Build better breath control, coordination, note transitions, and overall flute technique — one exercise at a time.</p>
+      </div>
+      <div class="benefit-card">
+        <div class="benefit-icon">💡</div>
+        <h3>Greater Confidence</h3>
+        <p>A clear, repeatable practice structure so you always know exactly what to work on next.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================= EBOOK PREVIEW (new) =============================
+     View-only preview built from the pages in the uploaded preview PDF, shown as
+     optimized images (not the PDF itself) so the original file is never linked
+     from the page. Right-click, drag, and pointer events on the image are
+     disabled as a casual-copy deterrent — see js/ebook.js for the note on limits. -->
+<section id="ebook-preview">
+  <div class="container">
+    <div class="section-head center reveal" style="margin-left:auto;margin-right:auto;">
+      <div class="eyebrow">Free Preview</div>
+      <h2>Preview the eBook</h2>
+      <p>Take a look inside before you purchase.</p>
+    </div>
+
+    <div class="ebook-preview-card reveal">
+      <div class="ebook-preview-viewer">
+        <span class="ebook-preview-badge">Free Preview</span>
+        <img id="ebookPreviewImg" src="assets/ebook-preview/alankaar-preview-1.webp" alt="30 Alankaras for Flute — eBook preview page" oncontextmenu="return false;" draggable="false">
+        <div class="ebook-preview-watermark" aria-hidden="true"></div>
+      </div>
+      <div class="ebook-preview-nav">
+        <button type="button" class="slider-btn" id="previewPrevBtn" aria-label="Previous preview page">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+        </button>
+        <span class="ebook-preview-counter" id="previewCounter">1 / 7</span>
+        <button type="button" class="slider-btn" id="previewNextBtn" aria-label="Next preview page">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+        </button>
+      </div>
+      <p class="ebook-preview-note">Sample pages shown for preview only, this is a view-only preview and not the downloadable eBook.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============================= PRODUCT INFORMATION ============================= -->
+<section id="product-info">
+  <div class="container">
+    <div class="section-head center reveal" style="margin-left:auto;margin-right:auto;">
+      <div class="eyebrow">Product Information</div>
+      <h2>30 Alankaras for Flute</h2>
+    </div>
+    <div class="ebook-info-card reveal">
+      <ul class="ebook-info-list">
+        <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg><span><strong>Format:</strong> Digital eBook (PDF)</span></li>
+        <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg><span><strong>Access:</strong> Lifetime access, no renewals</span></li>
+        <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg><span><strong>Delivery:</strong> Instant access after successful payment</span></li>
+        <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg><span><strong>Downloadable:</strong> Yes, keep it on any device</span></li>
+        <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg><span><strong>Designed for:</strong> Flute learners at every stage</span></li>
+        <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg><span><strong>Price:</strong> <span data-ebook-price>₹399</span></span></li>
+        <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg><span><strong>Shipping:</strong> None — this is a digital product</span></li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ============================= EBOOK STUDENT REVIEWS (new) =============================
+     Reuses the existing .review-card component from css/style.css (same one
+     used on the homepage's Reviews section) — laid out as a static 3-column
+     grid here since there are only a handful of reviews for this product. -->
+<section id="ebook-reviews">
+  <div class="container">
+    <div class="section-head center reveal" style="margin-left:auto;margin-right:auto;">
+      <div class="eyebrow">Student Reviews</div>
+      <h2>What students are saying</h2>
+      <p>A few notes from students using the eBook alongside their practice.</p>
+    </div>
+    <div class="ebook-review-grid reveal-stagger">
+      <div class="review-card">
+        <div class="stars">★★★★★</div>
+        <p>"I've been playing casually for a couple of years but always felt shaky moving between notes. Got through the first ten alankaras and my Sa-Re-Ga transitions already feel less clunky. Wish I'd found this earlier."</p>
+        <div class="review-person"><div class="review-avatar">P</div><div><div class="review-name">Priya Nair</div><div class="review-loc">Kochi</div></div></div>
+      </div>
+      <div class="review-card">
+        <div class="stars">★★★★☆</div>
+        <p>"Bought it on a whim after seeing an ad, didn't expect much for ₹399. The patterns are laid out clearly and it's easy to follow without a teacher around. Only wish there were a few more advanced ones toward the end."</p>
+        <div class="review-person"><div class="review-avatar">A</div><div><div class="review-name">Arjun Verma</div><div class="review-loc">Lucknow</div></div></div>
+      </div>
+      <div class="review-card">
+        <div class="stars">★★★★★</div>
+        <p>"My son is learning bansuri and his teacher recommended daily alankaar practice. This gives us something structured to work through between his classes. He's slowly getting faster at the ones we've covered so far."</p>
+        <div class="review-person"><div class="review-avatar">M</div><div><div class="review-name">Meenal Joshi</div><div class="review-loc">Nagpur</div></div></div>
+      </div>
+      <div class="review-card">
+        <div class="stars">★★★★★</div>
+        <p>"Simple, no-fuss PDF. I print a couple of pages at a time and keep them on my flute stand. Nothing fancy about it, it just does what it says on the page."</p>
+        <div class="review-person"><div class="review-avatar">D</div><div><div class="review-name">Devansh Rao</div><div class="review-loc">Hyderabad</div></div></div>
+      </div>
+      <div class="review-card">
+        <div class="stars">★★★★★</div>
+        <p>"Was struggling to find swars by ear. A few weeks into these patterns and I can anticipate where my fingers need to go before I've fully thought about it. Still very much a beginner, but this genuinely helped."</p>
+        <div class="review-person"><div class="review-avatar">K</div><div><div class="review-name">Kavya Iyer</div><div class="review-loc">Chennai</div></div></div>
+      </div>
+      <div class="review-card">
+        <div class="stars">★★★★★</div>
+        <p>"Picked this up along with the monthly class plan. My teacher suggested using a couple of pages as warm-up before each session. Good value for what it costs."</p>
+        <div class="review-person"><div class="review-avatar">R</div><div><div class="review-name">Rahul Bhatt</div><div class="review-loc">Jaipur</div></div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================= CHECKOUT ============================= -->
+<section class="alt" id="buy">
+  <div class="container">
+    <div class="section-head center reveal" style="margin-left:auto;margin-right:auto;">
+      <div class="eyebrow">Get Instant Access</div>
+      <h2>Get the eBook — <span data-ebook-price>₹399</span></h2>
+      <p>Enter your details below — your download link is sent straight to your email, and shown immediately on the next page too.</p>
+    </div>
+
+    <div class="form-card reveal">
+      <div class="ebook-checkout-summary">
+        <span>30 Alankaras for Flute · Lifetime Access</span>
+        <strong data-ebook-price>₹399</strong>
+      </div>
+
+      <form id="ebookForm" novalidate>
+        <div class="form-field full" style="margin-bottom:20px;">
+          <label for="fullName">Full Name</label>
+          <input type="text" id="fullName" name="fullName" placeholder="Your full name" required>
+          <span class="form-error" data-error-for="fullName"></span>
+        </div>
+        <div class="form-field full" style="margin-bottom:20px;">
+          <label for="email">Email Address</label>
+          <input type="email" id="email" name="email" placeholder="you@example.com" required>
+          <span class="form-error" data-error-for="email"></span>
+        </div>
+        <div class="form-field full" style="margin-bottom:8px;">
+          <label for="whatsapp">WhatsApp Number</label>
+          <input type="tel" id="whatsapp" name="whatsapp" placeholder="10-digit mobile number" required>
+          <span class="form-error" data-error-for="whatsapp"></span>
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-block" id="ebookSubmitBtn" style="margin-top:18px;">Get the eBook — <span data-ebook-price>₹399</span></button>
+        <div class="form-status" id="ebookFormStatus"></div>
+        <p style="font-size:12px;color:var(--ink-soft);text-align:center;margin-top:14px;">
+          By purchasing you agree to our <a href="policies/terms.html" style="text-decoration:underline;">Terms</a> and <a href="policies/refund.html" style="text-decoration:underline;">Refund Policy</a>.
+        </p>
+      </form>
+    </div>
+  </div>
+</section>
+
+<!-- ============================= FOOTER (identical to index.html) ============================= -->
+<footer>
+  <div class="container">
+    <div class="footer-grid">
+      <div class="footer-brand">
+        <a href="index.html" class="logo">The Flute <span>Room</span></a>
+        <p>Online flute classes for beginners across India. Unlimited live sessions, personalized guidance, and a supportive path to your first song.</p>
+      </div>
+      <div>
+        <h5>Explore</h5>
+        <ul>
+          <li><a href="index.html#pricing">Classes</a></li>
+          <li><a href="alankaars-ebook.html">eBook</a></li>
+          <li><a href="index.html#reviews">Reviews</a></li>
+          <li><a href="index.html#faq">FAQ</a></li>
+        </ul>
+      </div>
+      <div>
+        <h5>Legal</h5>
+        <ul>
+          <li><a href="policies/refund.html">Refund Policy</a></li>
+          <li><a href="policies/terms.html">Terms & Conditions</a></li>
+          <li><a href="policies/privacy.html">Privacy Policy</a></li>
+        </ul>
+      </div>
+      <div>
+        <h5>Contact</h5>
+        <ul>
+          <li><a href="mailto:prateek132008@gmail.com">prateek132008@gmail.com</a></li>
+          <li><a href="https://wa.me/918709268496" target="_blank" rel="noopener">+91 87092 68496</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>© <span id="year"></span> The Flute Room. All rights reserved.</span>
+      <span>Made for beginners, by people who love the flute.</span>
+    </div>
+  </div>
+</footer>
+
+<!-- ============================= WHATSAPP SUPPORT FLOAT ============================= -->
+<button class="whatsapp-float" id="supportFloat">
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.5 2 2 6.5 2 12c0 1.8.5 3.5 1.3 5L2 22l5.2-1.3c1.4.8 3.1 1.3 4.8 1.3 5.5 0 10-4.5 10-10S17.5 2 12 2z"/></svg>
+  <span class="label">Questions about the eBook? Chat with us</span>
+</button>
+
+<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+<script src="js/ebook.js" defer></script>
+</body>
+</html>
