@@ -64,6 +64,35 @@ document.addEventListener("DOMContentLoaded", () => {
     if (el) el.textContent = message || "";
   }
 
+  /* ============ META EMQ HELPERS (new) ============
+     Small, self-contained helpers used to improve Meta Purchase Event Match
+     Quality: reading the Pixel's own _fbp/_fbc browser-id cookies (or
+     deriving _fbc from a ?fbclid= URL param per Meta's documented format
+     when the cookie hasn't been set yet), and splitting the name field for
+     Advanced Matching / Conversions API. Pure helpers — no side effects. */
+  function getCookie(name) {
+    const match = document.cookie.match(new RegExp("(^| )" + name + "=([^;]+)"));
+    return match ? decodeURIComponent(match[2]) : "";
+  }
+  function getFbc() {
+    const existing = getCookie("_fbc");
+    if (existing) return existing;
+    const params = new URLSearchParams(window.location.search);
+    const fbclid = params.get("fbclid");
+    if (!fbclid) return "";
+    // Meta's documented fbc format: fb.{subdomainIndex}.{creationTime}.{fbclid}
+    return `fb.1.${Date.now()}.${fbclid}`;
+  }
+  function splitName(fullName) {
+    const parts = (fullName || "").trim().split(/\s+/);
+    return { firstName: parts[0] || "", lastName: parts.slice(1).join(" ") || "" };
+  }
+  function generateOrderId() {
+    const year = new Date().getFullYear();
+    const random = Math.floor(1000 + Math.random() * 9000);
+    return `EBK-${year}-${random}`;
+  }
+
   function validateForm(data) {
     let valid = true;
     ["fullName", "email", "whatsapp"].forEach(f => showError(f, ""));
@@ -85,6 +114,15 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
+    // ---- Advanced Matching: give the Pixel the customer's plain-text info so it
+    // can hash + attach it to every subsequent event on this page (raises EMQ).
+    // Meta's fbevents.js hashes these values client-side before they ever leave
+    // the browser — we never send raw or hashed PII to Meta ourselves here. ----
+    const { firstName, lastName } = splitName(data.fullName);
+    if (typeof fbq === "function") {
+      fbq("set", "userData", { em: data.email, ph: data.whatsapp, fn: firstName, ln: lastName });
+    }
+
     // ---- Fire Lead + InitiateCheckout ONLY here, after the user submits the form ----
     firePixelLead(data);
     firePixelInitiateCheckout();
@@ -93,11 +131,43 @@ document.addEventListener("DOMContentLoaded", () => {
     submitBtn.textContent = "Preparing payment...";
     formStatus.textContent = "";
 
-    openRazorpayCheckout(data);
+    // ---- Capture the Meta browser/click IDs and the order ID now, BEFORE payment,
+    // so the SAME values can be (a) saved to the sheet, (b) passed through to
+    // Razorpay as "notes" so the webhook/Conversions API call can use them later,
+    // and (c) reused by the success page — all for the same customer/attempt. ----
+    const orderId = generateOrderId();
+    const fbp = getCookie("_fbp");
+    const fbc = getFbc();
+    const userAgent = navigator.userAgent;
+
+    // ---- NEW: save the customer record as "Pending" BEFORE opening Razorpay,
+    // exactly like the flute-class enrollment flow already does — so a lead is
+    // never lost if the customer closes the payment popup or abandons checkout.
+    // saveToEbookSheet() upserts by Order ID, so this never creates a duplicate
+    // row when we update it to "Paid" after payment succeeds. ----
+    try {
+      await saveToEbookSheet({
+        ...data,
+        orderId,
+        paymentId: "",
+        paymentStatus: "Pending",
+        product: "ebook",
+        productName: EBOOK_CONFIG.EBOOK_NAME,
+        amount: EBOOK_CONFIG.EBOOK_PRICE,
+        fbp, fbc, userAgent
+      });
+    } catch (err) {
+      console.error("Ebook Apps Script pre-payment save failed:", err);
+      // Non-blocking by design (matches the rest of this flow's fail-open behavior) —
+      // the customer should still be able to pay even if the sheet write hiccups.
+    }
+
+    openRazorpayCheckout(data, { orderId, fbp, fbc, userAgent });
   });
 
   /* ============ 2. RAZORPAY CHECKOUT ============ */
-  function openRazorpayCheckout(data) {
+  function openRazorpayCheckout(data, meta) {
+    const { orderId, fbp, fbc, userAgent } = meta;
     const options = {
       key: SITE_CONFIG.RAZORPAY_KEY_ID, // reuses the SAME public key as the rest of the site
       amount: EBOOK_CONFIG.EBOOK_PRICE * 100, // Razorpay expects paise
@@ -112,7 +182,14 @@ document.addEventListener("DOMContentLoaded", () => {
       },
       notes: {
         product: "ebook",
-        product_name: EBOOK_CONFIG.EBOOK_NAME
+        product_name: EBOOK_CONFIG.EBOOK_NAME,
+        order_id: orderId,
+        // fbp/fbc travel with the Razorpay order/payment itself so the server-side
+        // webhook (the source of truth for "paid") can send a matching Conversions
+        // API Purchase event with these same browser IDs, even though a webhook
+        // has no access to the customer's cookies directly.
+        fbp: fbp || "",
+        fbc: fbc || ""
       },
       theme: { color: "#FF7A00" },
 
@@ -124,7 +201,9 @@ document.addEventListener("DOMContentLoaded", () => {
       handler: async function (response) {
         submitBtn.textContent = "Confirming payment...";
 
-        const orderId = generateOrderId();
+        // NOTE: reuses the SAME orderId generated before payment — this updates
+        // the existing "Pending" row to "Paid" instead of creating a second,
+        // duplicate customer record for the same purchase.
         const payload = {
           ...data,
           orderId,
@@ -133,12 +212,16 @@ document.addEventListener("DOMContentLoaded", () => {
           product: "ebook",
           productName: EBOOK_CONFIG.EBOOK_NAME,
           amount: EBOOK_CONFIG.EBOOK_PRICE,
-          ebookLink: EBOOK_CONFIG.EBOOK_DRIVE_LINK
+          ebookLink: EBOOK_CONFIG.EBOOK_DRIVE_LINK,
+          fbp, fbc, userAgent
         };
 
-        // Best-effort: save the order + trigger the confirmation email.
-        // Deliberately NOT blocking — if this fails, the customer must still
-        // reach the thank-you page and get their Drive link from there.
+        // Best-effort: update the order row (Pending -> Paid) + trigger the
+        // confirmation email. Deliberately NOT blocking — if this fails, the
+        // customer must still reach the thank-you page and get their Drive link
+        // from there. The Razorpay webhook (server-side, see Ebook_Code.gs) is
+        // the authoritative confirmation and will also mark this row Paid and
+        // fire the Conversions API Purchase event even if this call fails.
         try {
           await saveToEbookSheet(payload);
         } catch (err) {
@@ -179,12 +262,6 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     const params = new URLSearchParams(payload).toString();
     await fetch(`${EBOOK_CONFIG.EBOOK_GOOGLE_SCRIPT_URL}?${params}`, { method: "GET" });
-  }
-
-  function generateOrderId() {
-    const year = new Date().getFullYear();
-    const random = Math.floor(1000 + Math.random() * 9000);
-    return `EBK-${year}-${random}`;
   }
 
   /* ============ 4. META PIXEL — LEAD + INITIATE CHECKOUT ============
