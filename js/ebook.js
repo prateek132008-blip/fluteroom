@@ -189,7 +189,11 @@ document.addEventListener("DOMContentLoaded", () => {
         // API Purchase event with these same browser IDs, even though a webhook
         // has no access to the customer's cookies directly.
         fbp: fbp || "",
-        fbc: fbc || ""
+        fbc: fbc || "",
+        // NEW: the Drive link travels with the payment too, so the webhook (which
+        // is what actually sends the delivery email now — see Ebook_Code.gs) can
+        // put it in the email without needing to hardcode it a second time.
+        ebook_link: EBOOK_CONFIG.EBOOK_DRIVE_LINK || ""
       },
       theme: { color: "#FF7A00" },
 
@@ -216,17 +220,21 @@ document.addEventListener("DOMContentLoaded", () => {
           fbp, fbc, userAgent
         };
 
-        // Best-effort: update the order row (Pending -> Paid) + trigger the
-        // confirmation email. Deliberately NOT blocking — if this fails, the
-        // customer must still reach the thank-you page and get their Drive link
-        // from there. The Razorpay webhook (server-side, see Ebook_Code.gs) is
-        // the authoritative confirmation and will also mark this row Paid and
-        // fire the Conversions API Purchase event even if this call fails.
-        try {
-          await saveToEbookSheet(payload);
-        } catch (err) {
-          console.error("Ebook Apps Script call failed:", err);
-        }
+        // CHANGED: fire-and-forget instead of awaiting. This is a fast path only —
+        // it updates the order row (Pending -> Paid) and, as a backup, can trigger
+        // the confirmation email. We deliberately do NOT wait for it to finish
+        // before sending the customer to the thank-you page: that round trip to
+        // Apps Script was exactly what caused the "payment successful -> long
+        // wait -> success page" delay. { keepalive: true } lets the request keep
+        // running in the background even after we navigate away, so it still
+        // reliably reaches the server. The Razorpay webhook (server-side, see
+        // Ebook_Code.gs) remains the AUTHORITATIVE confirmation — it verifies the
+        // payment independently and is what actually guarantees the row gets
+        // marked Paid and the delivery email gets sent, even if this request or
+        // the customer's browser never completes it.
+        saveToEbookSheet(payload).catch(err => {
+          console.error("Ebook Apps Script call failed (webhook will still confirm):", err);
+        });
 
         sessionStorage.setItem("tfr_ebook_success_payload", JSON.stringify(payload));
         window.location.href = "ebook-success.html";
@@ -261,7 +269,10 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
     const params = new URLSearchParams(payload).toString();
-    await fetch(`${EBOOK_CONFIG.EBOOK_GOOGLE_SCRIPT_URL}?${params}`, { method: "GET" });
+    // keepalive: true lets this request finish even if the page is about to
+    // navigate away (e.g. the post-payment fire-and-forget call below) — without
+    // it, browsers can cancel in-flight requests on navigation.
+    await fetch(`${EBOOK_CONFIG.EBOOK_GOOGLE_SCRIPT_URL}?${params}`, { method: "GET", keepalive: true });
   }
 
   /* ============ 4. META PIXEL — LEAD + INITIATE CHECKOUT ============
