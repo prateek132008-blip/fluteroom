@@ -284,20 +284,20 @@ document.addEventListener("DOMContentLoaded", () => {
     const fbc = getFbc();
     const userAgent = navigator.userAgent;
 
+    // 1. Save a "pending" row to the Google Sheet BEFORE opening Razorpay, so we
+    //    never lose a lead even if the user closes the payment popup. CHANGED:
+    //    this no longer blocks checkout if it fails (matches the eBook flow) —
+    //    a slow or erroring sheet write should never stop a customer from being
+    //    able to pay. We still attempt + await it first so the "pending" row
+    //    genuinely exists before Razorpay opens in the normal case.
     try {
-      // 1. Save a "pending" row to the Google Sheet BEFORE opening Razorpay,
-      //    so we never lose a lead even if the user closes the payment popup.
       await saveToSheet({ ...data, paymentStatus: "Pending", paymentId: "", studentCode: "", fbp, fbc, userAgent });
-
-      // 2. Open Razorpay checkout
-      openRazorpayCheckout(data, { fbp, fbc, userAgent });
     } catch (err) {
-      console.error(err);
-      formStatus.textContent = "Something went wrong. Please try again or contact support.";
-      formStatus.style.color = "#C0392B";
-      submitBtn.disabled = false;
-      submitBtn.textContent = "Proceed to Payment";
+      console.error("Pre-payment sheet save failed (continuing to checkout anyway):", err);
     }
+
+    // 2. Open Razorpay checkout
+    openRazorpayCheckout(data, { fbp, fbc, userAgent });
   });
 
   /* ============ 3. RAZORPAY CHECKOUT ============ */
@@ -340,33 +340,37 @@ document.addEventListener("DOMContentLoaded", () => {
       // treating the payment as valid. This handler calls that verification
       // step via the Apps Script "verifyAndFinalize" action. See README →
       // RAZORPAY SETUP for exactly where the Key Secret and Webhook Secret go.
-      handler: async function (response) {
+      handler: function (response) {
         submitBtn.textContent = "Confirming payment...";
-        try {
-          const studentCode = generateStudentCode();
-          await saveToSheet({
-            ...data,
-            paymentStatus: "Paid",
-            paymentId: response.razorpay_payment_id,
-            studentCode,
-            fbp, fbc, userAgent
-          });
+        const studentCode = generateStudentCode();
 
-          const successPayload = {
-            ...data,
-            paymentId: response.razorpay_payment_id,
-            studentCode,
-            amount: planInfo.amount
-          };
-          sessionStorage.setItem("tfr_success_payload", JSON.stringify(successPayload));
-          window.location.href = "success.html";
-        } catch (err) {
-          console.error(err);
-          formStatus.textContent = "Payment received, but confirmation failed. Please contact support on WhatsApp with your payment ID: " + response.razorpay_payment_id;
-          formStatus.style.color = "#C0392B";
-          submitBtn.disabled = false;
-          submitBtn.textContent = "Proceed to Payment";
-        }
+        // CHANGED: fire-and-forget instead of awaiting. This call updates the
+        // row (Pending -> Paid) and is a fast-path backup for the confirmation
+        // email. We no longer wait for it before sending the customer to the
+        // success page — that round trip was the "payment successful -> long
+        // wait -> success page" delay. { keepalive: true } (inside saveToSheet)
+        // lets it keep running in the background after we navigate away. The
+        // Razorpay webhook (server-side, see Code.gs) independently verifies
+        // the payment and reliably marks the row Paid even if this never
+        // completes, so nothing here can silently lose an order.
+        saveToSheet({
+          ...data,
+          paymentStatus: "Paid",
+          paymentId: response.razorpay_payment_id,
+          studentCode,
+          fbp, fbc, userAgent
+        }).catch(err => {
+          console.error("Post-payment sheet save failed (webhook will still confirm):", err);
+        });
+
+        const successPayload = {
+          ...data,
+          paymentId: response.razorpay_payment_id,
+          studentCode,
+          amount: planInfo.amount
+        };
+        sessionStorage.setItem("tfr_success_payload", JSON.stringify(successPayload));
+        window.location.href = "success.html";
       },
       modal: {
         // Fires if the user closes the popup without paying — no pixel event here.
@@ -390,8 +394,11 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
     // Uses GET with URL params (see README) for reliability with Apps Script Web Apps.
+    // keepalive: true lets this request finish even if the page is about to
+    // navigate away (e.g. the post-payment fire-and-forget call above) —
+    // without it, browsers can cancel in-flight requests on navigation.
     const params = new URLSearchParams(payload).toString();
-    await fetch(`${SITE_CONFIG.GOOGLE_SCRIPT_URL}?${params}`, { method: "GET" });
+    await fetch(`${SITE_CONFIG.GOOGLE_SCRIPT_URL}?${params}`, { method: "GET", keepalive: true });
   }
 
   /* ============ 4. STUDENT CODE GENERATION ============ */
