@@ -251,8 +251,16 @@ section.alt { background: var(--cream); }
   box-shadow: 0 6px 14px rgba(255,122,0,0.35);
 }
 .price-plan { font-size: 14px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--orange-deep); margin-bottom: 10px; }
+.price-original { font-size: 16px; font-weight: 600; color: var(--ink-soft); text-decoration: line-through; margin-bottom: 2px; }
 .price-amount { font-family: var(--font-display); font-size: 40px; font-weight: 700; margin-bottom: 2px; }
 .price-amount span { font-size: 15px; font-weight: 500; color: var(--ink-soft); font-family: var(--font-body); }
+.price-save-badge {
+  display: inline-flex; align-items: center;
+  background: var(--orange-wash); color: var(--orange-deep);
+  font-size: 12px; font-weight: 700;
+  padding: 5px 12px; border-radius: 100px;
+  margin-bottom: 14px;
+}
 .price-sub { font-size: 13.5px; color: var(--ink-soft); margin-bottom: 24px; }
 .price-features { list-style: none; display: flex; flex-direction: column; gap: 12px; margin-bottom: 28px; flex-grow: 1; }
 .price-features li { display: flex; align-items: flex-start; gap: 10px; font-size: 14.5px; }
