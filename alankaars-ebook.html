@@ -46,9 +46,18 @@ fbq('track', 'PageView');
   .ebook-hero-copy .eyebrow { margin-bottom: 16px; }
   .ebook-hero-copy h1 { font-size: clamp(30px, 4vw, 46px); margin-bottom: 16px; }
   .ebook-hero-copy p.lede { font-size: 17px; color: var(--ink-soft); max-width: 480px; margin-bottom: 26px; }
-  .ebook-price-row { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; margin-bottom: 26px; }
-  .ebook-price { font-family: var(--font-display); font-size: 40px; font-weight: 700; color: var(--ink); }
-  .ebook-price-original { font-size: 20px; font-weight: 600; color: var(--ink-soft); text-decoration: line-through; margin-right: 2px; }
+  /* ---- Price / offer block (redesigned for clearer hierarchy) ----
+     ₹399 is the dominant element; the strike-through original price and
+     "You Save" badge sit clearly below it, subtle by comparison; the
+     countdown sits on its own line, small and muted, so it creates urgency
+     without competing with the price for attention. Values, price logic,
+     and countdown behavior are unchanged — this only restructures the
+     visual weighting. */
+  .ebook-price-block { margin-bottom: 26px; }
+  .ebook-price-main { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+  .ebook-price { font-family: var(--font-display); font-size: clamp(36px, 6vw, 46px); font-weight: 800; color: var(--ink); line-height: 1; }
+  .ebook-price-original { font-size: 16px; font-weight: 600; color: var(--ink-soft); text-decoration: line-through; opacity: 0.7; }
+  .ebook-price-sub { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
   .ebook-save-badge {
     display: inline-flex; align-items: center;
     background: var(--orange-wash); color: var(--orange-deep);
@@ -61,6 +70,19 @@ fbq('track', 'PageView');
     background: var(--orange-wash); color: var(--orange-deep);
     font-size: 12.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;
     padding: 7px 14px; border-radius: 100px;
+  }
+  /* ---- Offer countdown — intentionally quiet: small, muted label text with
+     only the digits picking up the accent color, so it reads as a subtle
+     nudge rather than a second competing "price". ---- */
+  .ebook-countdown {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 12.5px; font-weight: 600; color: var(--ink-soft);
+    margin-top: 12px;
+  }
+  .ebook-countdown svg { color: var(--orange); flex-shrink: 0; }
+  .ebook-countdown-time { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--orange-deep); }
+  @media (max-width: 430px) {
+    .ebook-countdown { font-size: 12px; }
   }
   .ebook-trust { display: flex; gap: 18px; flex-wrap: wrap; font-size: 13.5px; color: var(--ink-soft); margin-top: 22px; }
   .ebook-trust span { display: flex; align-items: center; gap: 7px; }
@@ -230,15 +252,24 @@ fbq('track', 'PageView');
       <h1>30 Alankaras for Flute</h1>
       <p class="lede">Build stronger fundamentals. Train your ears. Improve your swar identification and finger speed — with 30 structured alankara exercises you can practice at your own pace.</p>
 
-      <div class="ebook-price-row">
-        <div class="ebook-price"><span class="ebook-price-original">₹1,299</span> <span data-ebook-price>₹399</span></div>
-        <span class="ebook-save-badge">You Save ₹900</span>
-        <span class="ebook-access-pill">🔒 Lifetime Access</span>
+      <div class="ebook-price-block">
+        <div class="ebook-price-main">
+          <span class="ebook-price" data-ebook-price>₹399</span>
+          <span class="ebook-price-original">₹1,299</span>
+        </div>
+        <div class="ebook-price-sub">
+          <span class="ebook-save-badge">You Save ₹900</span>
+          <span class="ebook-access-pill">🔒 Lifetime Access</span>
+        </div>
+        <span class="ebook-countdown" id="ebookCountdown">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>
+          Offer ends in <span class="ebook-countdown-time" id="ebookCountdownTime">24:00:00</span>
+        </span>
       </div>
 
       <div class="hero-actions">
         <a href="#buy" class="btn btn-primary">Get the eBook — <span data-ebook-price>₹399</span></a>
-        <a href="#benefits-ebook" class="btn btn-outline">See What's Inside</a>
+        <a href="#ebook-preview" class="btn btn-outline">See What's Inside</a>
       </div>
 
       <div class="ebook-trust">
@@ -533,5 +564,55 @@ fbq('track', 'PageView');
 
 <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
 <script src="js/ebook.js" defer></script>
+
+<!-- ============ OFFER COUNTDOWN TIMER ============
+     Fully self-contained — does not touch config.js, ebook.js, the form,
+     Razorpay, or Meta Pixel. Uses its own localStorage key so it can never
+     collide with the eBook success-page keys (tfr_ebook_success_payload,
+     tfr_ebook_purchase_fired_*).
+
+     Behavior: on first visit, sets a 24-hour target end time and stores it.
+     On every later visit/refresh, reads that same stored end time, so the
+     countdown keeps going down correctly instead of resetting to 24:00:00.
+     Once it hits 00:00:00, it automatically starts a fresh 24-hour countdown
+     and repeats indefinitely. -->
+<script>
+(function () {
+  var STORAGE_KEY = "tfr_ebook_offer_end";
+  var DURATION_MS = 24 * 60 * 60 * 1000;
+
+  function getEndTime() {
+    var stored = parseInt(localStorage.getItem(STORAGE_KEY), 10);
+    if (!stored || isNaN(stored) || stored <= Date.now()) {
+      stored = Date.now() + DURATION_MS;
+      localStorage.setItem(STORAGE_KEY, String(stored));
+    }
+    return stored;
+  }
+
+  var endTime = getEndTime();
+  var timeEl = document.getElementById("ebookCountdownTime");
+  if (!timeEl) return;
+
+  function pad(n) { return n < 10 ? "0" + n : String(n); }
+
+  function tick() {
+    var remaining = endTime - Date.now();
+    if (remaining <= 0) {
+      endTime = Date.now() + DURATION_MS;
+      localStorage.setItem(STORAGE_KEY, String(endTime));
+      remaining = DURATION_MS;
+    }
+    var totalSeconds = Math.floor(remaining / 1000);
+    var h = Math.floor(totalSeconds / 3600);
+    var m = Math.floor((totalSeconds % 3600) / 60);
+    var s = totalSeconds % 60;
+    timeEl.textContent = pad(h) + ":" + pad(m) + ":" + pad(s);
+  }
+
+  tick();
+  setInterval(tick, 1000);
+})();
+</script>
 </body>
 </html>
