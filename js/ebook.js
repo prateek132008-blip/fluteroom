@@ -87,6 +87,16 @@ document.addEventListener("DOMContentLoaded", () => {
     const parts = (fullName || "").trim().split(/\s+/);
     return { firstName: parts[0] || "", lastName: parts.slice(1).join(" ") || "" };
   }
+  // NEW: matches Ebook_Code.gs's normalizePhone() exactly (assumes India/+91
+  // for any bare 10-digit number). Without this, the Pixel's own client-side
+  // hashing of "ph" only strips non-digits — it does NOT add a country code —
+  // so the same phone number would hash differently between the browser
+  // Purchase event and the server CAPI Purchase event.
+  function normalizePhoneForPixel(phone) {
+    const digits = (phone || "").replace(/\D/g, "");
+    if (digits.length === 10) return "91" + digits;
+    return digits;
+  }
   function generateOrderId() {
     const year = new Date().getFullYear();
     const random = Math.floor(1000 + Math.random() * 9000);
@@ -120,7 +130,18 @@ document.addEventListener("DOMContentLoaded", () => {
     // the browser — we never send raw or hashed PII to Meta ourselves here. ----
     const { firstName, lastName } = splitName(data.fullName);
     if (typeof fbq === "function") {
-      fbq("set", "userData", { em: data.email, ph: data.whatsapp, fn: firstName, ln: lastName });
+      // NEW: external_id (raw here — fbevents.js hashes it client-side, same
+      // as em/ph/fn/ln) gives Meta an extra, independent match signal beyond
+      // em/ph, sourced from the already-collected email — nothing new is
+      // gathered. ph is now normalized the same way the GAS backend does,
+      // so browser and server events hash the same digits.
+      fbq("set", "userData", {
+        em: data.email,
+        ph: normalizePhoneForPixel(data.whatsapp),
+        fn: firstName,
+        ln: lastName,
+        external_id: (data.email || "").trim().toLowerCase()
+      });
     }
 
     // ---- Fire Lead + InitiateCheckout ONLY here, after the user submits the form ----
