@@ -150,11 +150,21 @@ document.addEventListener("DOMContentLoaded", () => {
     // fbevents.js hashes + includes it with this Purchase event, raising EMQ.
     // Nothing raw/hashed is sent to Meta by our own code — the Pixel does it.
     const nameParts = (data.fullName || "").trim().split(/\s+/);
+    // NEW: ph is normalized to match Ebook_Code.gs's normalizePhone() (adds
+    // the India country code for a bare 10-digit number) so the browser
+    // Purchase event's phone hash matches the server CAPI Purchase event's
+    // phone hash for the same customer — previously these could hash
+    // differently. NEW: external_id (raw — the Pixel hashes it, same as
+    // em/ph/fn/ln) adds an extra match signal sourced from the
+    // already-collected email.
+    const rawWhatsapp = (data.whatsapp || "").replace(/\D/g, "");
+    const normalizedPhone = rawWhatsapp.length === 10 ? "91" + rawWhatsapp : rawWhatsapp;
     fbq("set", "userData", {
       em: data.email,
-      ph: data.whatsapp,
+      ph: normalizedPhone,
       fn: nameParts[0] || "",
-      ln: nameParts.slice(1).join(" ") || ""
+      ln: nameParts.slice(1).join(" ") || "",
+      external_id: (data.email || "").trim().toLowerCase()
     });
     fbq("track", "Purchase", {
       value: data.amount,
