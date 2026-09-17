@@ -161,27 +161,30 @@ document.addEventListener("DOMContentLoaded", () => {
     const fbc = getFbc();
     const userAgent = navigator.userAgent;
 
-    // ---- NEW: save the customer record as "Pending" BEFORE opening Razorpay,
+    // ---- Save the customer record as "Pending" BEFORE opening Razorpay,
     // exactly like the flute-class enrollment flow already does — so a lead is
     // never lost if the customer closes the payment popup or abandons checkout.
     // saveToEbookSheet() upserts by Order ID, so this never creates a duplicate
-    // row when we update it to "Paid" after payment succeeds. ----
-    try {
-      await saveToEbookSheet({
-        ...data,
-        orderId,
-        paymentId: "",
-        paymentStatus: "Pending",
-        product: "ebook",
-        productName: EBOOK_CONFIG.EBOOK_NAME,
-        amount: EBOOK_CONFIG.EBOOK_PRICE,
-        fbp, fbc, userAgent
-      });
-    } catch (err) {
-      console.error("Ebook Apps Script pre-payment save failed:", err);
-      // Non-blocking by design (matches the rest of this flow's fail-open behavior) —
-      // the customer should still be able to pay even if the sheet write hiccups.
-    }
+    // row when we update it to "Paid" after payment succeeds.
+    // FIXED: this is now fire-and-forget (matches the post-payment call below)
+    // instead of being awaited. Google Apps Script Web App calls can be slow
+    // or unpredictable (cold starts, concurrent-request queuing) with no
+    // client-side timeout, so awaiting this here was delaying Razorpay from
+    // opening at all — sometimes for minutes — which is what customers were
+    // seeing as a stuck/loading checkout. keepalive: true (inside
+    // saveToEbookSheet) still lets this request finish in the background. ----
+    saveToEbookSheet({
+      ...data,
+      orderId,
+      paymentId: "",
+      paymentStatus: "Pending",
+      product: "ebook",
+      productName: EBOOK_CONFIG.EBOOK_NAME,
+      amount: EBOOK_CONFIG.EBOOK_PRICE,
+      fbp, fbc, userAgent
+    }).catch(err => {
+      console.error("Ebook Apps Script pre-payment save failed (continuing to checkout anyway):", err);
+    });
 
     openRazorpayCheckout(data, { orderId, fbp, fbc, userAgent });
   });
