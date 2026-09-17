@@ -308,18 +308,20 @@ document.addEventListener("DOMContentLoaded", () => {
     const userAgent = navigator.userAgent;
 
     // 1. Save a "pending" row to the Google Sheet BEFORE opening Razorpay, so we
-    //    never lose a lead even if the user closes the payment popup. CHANGED:
-    //    this no longer blocks checkout if it fails (matches the eBook flow) —
-    //    a slow or erroring sheet write should never stop a customer from being
-    //    able to pay. We still attempt + await it first so the "pending" row
-    //    genuinely exists before Razorpay opens in the normal case.
-    try {
-      await saveToSheet({ ...data, paymentStatus: "Pending", paymentId: "", studentCode: "", fbp, fbc, userAgent });
-    } catch (err) {
+    //    never lose a lead even if the user closes the payment popup.
+    //    FIXED: this is now fire-and-forget (matches the post-payment call
+    //    further down) instead of being awaited. Google Apps Script Web App
+    //    calls can be slow or unpredictable (cold starts, concurrent-request
+    //    queuing) with no client-side timeout, so awaiting this here was
+    //    delaying Razorpay from opening at all — sometimes for minutes —
+    //    which is what customers were seeing as a stuck/loading checkout.
+    //    keepalive: true (inside saveToSheet) still lets this request finish
+    //    in the background even though we no longer wait for it.
+    saveToSheet({ ...data, paymentStatus: "Pending", paymentId: "", studentCode: "", fbp, fbc, userAgent }).catch(err => {
       console.error("Pre-payment sheet save failed (continuing to checkout anyway):", err);
-    }
+    });
 
-    // 2. Open Razorpay checkout
+    // 2. Open Razorpay checkout — immediately, no longer waiting on the network call above
     openRazorpayCheckout(data, { fbp, fbc, userAgent });
   });
 
