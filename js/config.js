@@ -116,5 +116,15 @@ const PAYMENT_RECOVERY = {
   // Option 3 — "Pay to Phone Number" (any UPI app → Pay to phone number).
   // Enter the 10-digit number linked to the account below. Leave "" to hide Option 3.
   PAY_PHONE_NUMBER: "7541940089",
-  PAY_PHONE_NAME: "NIDHI JHA"              // name customers will see in their UPI app
+  PAY_PHONE_NAME: "NIDHI JHA",             // name customers will see in their UPI app
+
+  // "Works with all UPI apps" badges (shown above "Having trouble with payment?").
+  // Put the OFFICIAL logo images at these paths (PNG/SVG, transparent background).
+  // Until a file exists, a neat text badge with the name is shown instead.
+  APP_BADGES: [
+    { name: "UPI",        image: "assets/payment-badges/upi.png", top: true },  // large logo on top
+    { name: "Google Pay", image: "assets/payment-badges/google-pay.png" },
+    { name: "PhonePe",    image: "assets/payment-badges/phonepe.png" },
+    { name: "Paytm",      image: "assets/payment-badges/paytm.png" }
+  ]
 };
