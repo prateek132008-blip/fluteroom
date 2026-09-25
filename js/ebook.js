@@ -1,821 +1,885 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>30 Alankaras for Flute — eBook (₹399, Lifetime Access) | The Flute Room</title>
-<meta name="description" content="A structured 30-alankara eBook for flute learners — build ear training, swar identification, and finger speed. ₹399, instant digital access, lifetime.">
+/* ==========================================================================
+   THE FLUTE ROOM — ebook.js
+   Powers ONLY the /alankaars-ebook.html sales page for "30 Alankaras for
+   Flute". Completely separate from js/main.js (the flute-class enrollment
+   flow) — nothing here touches the existing enrollment form, sheet, or
+   student-code logic.
 
-<!-- ============ SEO / Open Graph (new — only for this page) ============ -->
-<meta property="og:title" content="30 Alankaras for Flute — eBook | The Flute Room">
-<meta property="og:description" content="Structured alankara exercises to build ear training, swar identification and finger speed on the flute. ₹399 · Lifetime Access.">
-<meta property="og:type" content="product">
-<meta name="theme-color" content="#FF7A00">
-<link rel="canonical" href="https://www.example.com/alankaars-ebook.html">
+   Reuses: the SAME Meta Pixel (already initialized in this page's <head>,
+   same ID as the rest of the site) and the SAME Razorpay public key from
+   js/config.js (SITE_CONFIG). Talks to a SEPARATE Apps Script
+   (EBOOK_CONFIG.EBOOK_GOOGLE_SCRIPT_URL).
 
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="css/style.css">
+   Sections: 1) Form + validation  2) Razorpay order + checkout
+             3) Payment recovery (UPI app hand-off / stuck "processing")
+             4) Apps Script calls  5) Meta Pixel events
 
-<!-- ============ CONFIG ============ -->
-<script src="js/config.js" defer></script>
+   PAYMENT-FLOW CHANGES IN THIS VERSION (see audit notes):
+   - A real Razorpay ORDER is created server-side (Apps Script) and passed to
+     checkout as order_id. Previously no order was created, so Razorpay's
+     auto-capture setting did not apply and payments could stay "authorized".
+     The order is PRE-FETCHED in the background as soon as the customer
+     starts filling the form, so checkout normally opens instantly. The wait
+     on submit is capped at 6 s; if Apps Script is slow/down, checkout still
+     opens (order-less fallback) — the server captures those payments later.
+   - The same order + attempt ID is REUSED when the customer retries, so a
+     failed-then-successful purchase is ONE sheet row, not a stale "Pending"
+     row plus a separate paid row.
+   - RECOVERY: if the checkout success handler never runs (page reloaded /
+     killed while the customer was in the UPI app, or Razorpay's "Payment
+     processing" screen never resolves), the page asks the server — which
+     asks Razorpay — whether the order was paid, and sends the customer to
+     the Thank You page if it was. Runs when the tab becomes visible again
+     during checkout, after the popup is closed, and on the next page load.
+   - The success handler no longer depends on localStorage/sessionStorage
+     working (they can throw in some in-app browsers); the payment ID is
+     carried in the Thank You page URL.
+   - A missing/failed checkout.js no longer leaves the button stuck on
+     "Preparing payment..." forever.
+   - The eBook link is no longer shipped to the browser — it is emailed by
+     the server only after the payment is verified.
+   - PAYMENT RECOVERY: a permanent floating "Payment failed? — Pay here"
+     button (above the WhatsApp float) opens a popup with Retry Payment
+     (same order, no reload), Scan & Pay QR, Copy UPI ID, "Already paid?"
+     WhatsApp screenshot and Call support. The popup NEVER opens by itself —
+     not on a failed payment, not on closing Razorpay. Details come from
+     PAYMENT_RECOVERY in js/config.js. The "already paid?" safety check on
+     retry runs in parallel instead of being awaited before checkout.
+   ========================================================================== */
 
-<!-- ============ META PIXEL BASE CODE ============
-     Reuses the SAME Pixel ID as every other page on the site.
-     Only base pixel + PageView here. Lead / InitiateCheckout fire from
-     js/ebook.js at the correct moments; Purchase fires once on ebook-success.html. -->
-<script>
-!function(f,b,e,v,n,t,s)
-{if(f.fbq)return;n=f.fbq=function(){n.callMethod?
-n.callMethod.apply(n,arguments):n.queue.push(arguments)};
-if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
-n.queue=[];t=b.createElement(e);t.async=!0;
-t.src=v;s=b.getElementsByTagName(e)[0];
-s.parentNode.insertBefore(t,s)}(window, document,'script',
-'https://connect.facebook.net/en_US/fbevents.js');
-fbq('init', '27629504953321020');
-fbq('track', 'PageView');
-</script>
-<noscript><img height="1" width="1" style="display:none" src="https://www.facebook.com/tr?id=27629504953321020&ev=PageView&noscript=1" /></noscript>
+document.addEventListener("DOMContentLoaded", () => {
+  const yearEl = document.getElementById("year");
+  if (yearEl) yearEl.textContent = new Date().getFullYear();
 
-<!-- ============ PAGE-SCOPED STYLES (same pattern as policies/*.html) ============
-     Reuses every existing CSS variable, font, radius, shadow and button class.
-     Only adds the handful of rules unique to a book-style product page. -->
-<style>
-  .ebook-hero { padding: 150px 0 90px; overflow: hidden; }
-  .ebook-hero .container { display: grid; grid-template-columns: 0.85fr 1.15fr; gap: 56px; align-items: center; }
-  .ebook-hero-copy .eyebrow { margin-bottom: 16px; }
-  .ebook-hero-copy h1 { font-size: clamp(30px, 4vw, 46px); margin-bottom: 16px; }
-  .ebook-hero-copy p.lede { font-size: 17px; color: var(--ink-soft); max-width: 480px; margin-bottom: 26px; }
-  /* ---- Price / offer block (redesigned for clearer hierarchy) ----
-     ₹399 is the dominant element; the strike-through original price and
-     "You Save" badge sit clearly below it, subtle by comparison; the
-     countdown sits on its own line, small and muted, so it creates urgency
-     without competing with the price for attention. Values, price logic,
-     and countdown behavior are unchanged — this only restructures the
-     visual weighting. */
-  .ebook-price-block { margin-bottom: 26px; }
-  .ebook-price-main { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
-  .ebook-price { font-family: var(--font-display); font-size: clamp(36px, 6vw, 46px); font-weight: 800; color: var(--ink); line-height: 1; }
-  .ebook-price-original { font-size: 16px; font-weight: 600; color: var(--ink-soft); text-decoration: line-through; opacity: 0.7; }
-  .ebook-price-sub { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
-  .ebook-save-badge {
-    display: inline-flex; align-items: center;
-    background: var(--orange-wash); color: var(--orange-deep);
-    font-size: 12.5px; font-weight: 700;
-    padding: 6px 12px; border-radius: 100px;
-  }
-  .ebook-checkout-price-original { font-size: 13px; font-weight: 600; color: var(--ink-soft); text-decoration: line-through; margin-right: 6px; }
-  .ebook-access-pill {
-    display: inline-flex; align-items: center; gap: 6px;
-    background: var(--orange-wash); color: var(--orange-deep);
-    font-size: 12.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;
-    padding: 7px 14px; border-radius: 100px;
-  }
-  /* ---- Offer countdown — intentionally quiet: small, muted label text with
-     only the digits picking up the accent color, so it reads as a subtle
-     nudge rather than a second competing "price". ---- */
-  .ebook-countdown {
-    display: inline-flex; align-items: center; gap: 6px;
-    font-size: 12.5px; font-weight: 600; color: var(--ink-soft);
-    margin-top: 12px;
-  }
-  .ebook-countdown svg { color: var(--orange); flex-shrink: 0; }
-  .ebook-countdown-time { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--orange-deep); }
-  @media (max-width: 430px) {
-    .ebook-countdown { font-size: 12px; }
-  }
-  .ebook-trust { display: flex; gap: 18px; flex-wrap: wrap; font-size: 13.5px; color: var(--ink-soft); margin-top: 22px; }
-  .ebook-trust span { display: flex; align-items: center; gap: 7px; }
-  .ebook-trust svg { color: var(--orange); flex-shrink: 0; }
+  // ---- Fill in price / cover image from config ----
+  document.querySelectorAll("[data-ebook-price]").forEach(el => {
+    el.textContent = "₹" + EBOOK_CONFIG.EBOOK_PRICE;
+  });
+  const coverImg = document.getElementById("ebookCoverImg");
+  if (coverImg) coverImg.src = EBOOK_CONFIG.EBOOK_COVER_IMAGE;
 
-  /* ---- Book showcase (transparent cover PNG — continuously floats above a
-     grounded contact shadow that breathes in sync, like the box is hovering
-     just above a surface, plus a faint ambient glow for depth) ---- */
-  .ebook-showcase { display: flex; justify-content: center; align-items: center; position: relative; padding: 20px 20px 40px; }
-  .ebook-showcase::before {
-    content: "";
-    position: absolute; inset: 6% 12% 14%;
-    background: radial-gradient(closest-side, rgba(255,122,0,0.18), transparent 72%);
-    filter: blur(30px);
-    z-index: 0;
+  /* ============ SAFE STORAGE (new) ============
+     localStorage / sessionStorage can THROW (private mode, blocked cookies,
+     some Instagram/Facebook in-app browsers). Previously an exception here
+     inside the Razorpay success handler would stop window.location.replace()
+     from ever running — a paid customer stuck on "Confirming payment...". */
+  function storeGet(area, key) {
+    try { return window[area].getItem(key); } catch (e) { return null; }
   }
-  .ebook-cover-frame {
-    position: relative; z-index: 2;
-    max-width: 380px; width: 100%;
-    animation: ebook-float 4.5s ease-in-out infinite;
+  function storeSet(area, key, value) {
+    try { window[area].setItem(key, value); } catch (e) { /* ignore */ }
   }
-  .ebook-cover-frame img {
-    width: 100%; display: block;
-    filter: drop-shadow(0 22px 18px rgba(17,17,17,0.25)) drop-shadow(0 6px 8px rgba(17,17,17,0.18));
-  }
-  /* ---- Ground contact shadow — a separate, anchored ellipse (does NOT float
-     with the box) that breathes wider/darker as the box dips closer to it ---- */
-  .ebook-ground-shadow {
-    position: absolute; z-index: 1;
-    left: 50%; bottom: 26px;
-    transform: translateX(-50%);
-    width: 46%; height: 20px;
-    background: radial-gradient(closest-side, rgba(17,17,17,0.32), transparent 75%);
-    filter: blur(7px);
-    border-radius: 50%;
-    animation: ebook-shadow-breathe 4.5s ease-in-out infinite;
-  }
-  @keyframes ebook-float {
-    0%, 100% { transform: translateY(0); }
-    50% { transform: translateY(-16px); }
-  }
-  @keyframes ebook-shadow-breathe {
-    0%, 100% { width: 46%; opacity: 0.9; }
-    50% { width: 36%; opacity: 0.5; }
+  function storeRemove(area, key) {
+    try { window[area].removeItem(key); } catch (e) { /* ignore */ }
   }
 
-  /* ---- Benefits grid (reuses .benefit-card styling, custom column count) ---- */
-  .ebook-benefit-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
-  @media (max-width: 980px) { .ebook-benefit-grid { grid-template-columns: repeat(2, 1fr); } }
-  @media (max-width: 640px) { .ebook-benefit-grid { grid-template-columns: 1fr; } }
+  /* ============ MOBILE NAV DRAWER (same behavior as the rest of the site) ============ */
+  const drawer = document.getElementById("mobileDrawer");
+  const navToggle = document.getElementById("navToggle");
+  const drawerClose = document.getElementById("drawerClose");
+  if (navToggle && drawer) navToggle.addEventListener("click", () => drawer.classList.add("open"));
+  if (drawerClose && drawer) drawerClose.addEventListener("click", () => drawer.classList.remove("open"));
+  if (drawer) drawer.querySelectorAll("a").forEach(a => a.addEventListener("click", () => drawer.classList.remove("open")));
 
-  /* ---- Product info list ---- */
-  .ebook-info-card {
-    background: var(--white); border: 1.5px solid var(--line); border-radius: var(--radius-lg);
-    box-shadow: var(--shadow-soft); padding: 40px; max-width: 640px; margin: 0 auto;
-  }
-  .ebook-info-list { list-style: none; display: flex; flex-direction: column; gap: 14px; }
-  .ebook-info-list li { display: flex; align-items: flex-start; gap: 10px; font-size: 15px; color: var(--ink-soft); }
-  .ebook-info-list li strong { color: var(--ink); }
-  .ebook-info-list li svg { color: var(--orange); flex-shrink: 0; margin-top: 3px; }
-
-  /* ---- Checkout card ---- */
-  .ebook-checkout-summary {
-    display: flex; align-items: center; justify-content: space-between; gap: 14px;
-    background: var(--orange-wash); border-radius: 12px; padding: 18px 20px; margin-bottom: 26px; flex-wrap: wrap;
-  }
-  .ebook-checkout-summary strong { font-family: var(--font-display); font-size: 22px; }
-
-  @media (max-width: 980px) {
-    .ebook-hero .container { grid-template-columns: 1fr; }
-    .ebook-showcase { order: -1; }
+  /* ============ HEADER SCROLL STATE ============ */
+  const header = document.getElementById("siteHeader");
+  if (header) {
+    window.addEventListener("scroll", () => {
+      header.classList.toggle("scrolled", window.scrollY > 12);
+    }, { passive: true });
   }
 
-  /* ---- What is Alankaar? (reuses .why-grid / .why-list / .why-item / .why-num
-     from css/style.css — same components as the "Why Unlimited" section on the
-     homepage, just new copy) ---- */
-  #what-is-alankaar .why-grid { padding-top: 90px; }
+  /* ============ SCROLL REVEAL ============ */
+  const revealEls = document.querySelectorAll(".reveal, .reveal-stagger");
+  const io = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        entry.target.classList.add("is-visible");
+        io.unobserve(entry.target);
+      }
+    });
+  }, { threshold: 0.15 });
+  revealEls.forEach(el => io.observe(el));
 
-  /* ---- eBook Preview (new — view-only page viewer) ---- */
-  .ebook-preview-card {
-    background: var(--white); border: 1.5px solid var(--line); border-radius: var(--radius-lg);
-    box-shadow: var(--shadow-soft); padding: 32px; max-width: 520px; margin: 0 auto; text-align: center;
-  }
-  .ebook-preview-viewer {
-    position: relative; border-radius: var(--radius); overflow: hidden;
-    border: 1px solid var(--line); background: var(--cream);
-  }
-  .ebook-preview-viewer img {
-    position: relative; z-index: 0;
-    width: 100%; display: block;
-    user-select: none; -webkit-user-select: none;
-    pointer-events: none; /* discourages right-click save / drag-out on most browsers */
-  }
-  /* ---- Tiled "PREVIEW" watermark over the page image (CSS overlay, not
-     baked into the image file — repeats automatically at any page height) ---- */
-  .ebook-preview-watermark {
-    position: absolute; inset: 0; z-index: 1; pointer-events: none;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='170' height='110'%3E%3Ctext x='-6' y='68' font-family='Inter, sans-serif' font-size='19' font-weight='700' fill='rgba(17,17,17,0.15)' transform='rotate(-28 85 55)'%3EPREVIEW%3C/text%3E%3C/svg%3E");
-    background-repeat: repeat;
-  }
-  .ebook-preview-watermark.is-hidden { display: none; }
-  .ebook-preview-badge {
-    position: absolute; top: 12px; left: 12px; z-index: 2;
-    background: var(--orange); color: #fff; font-size: 11px; font-weight: 700;
-    text-transform: uppercase; letter-spacing: 0.06em; padding: 5px 11px; border-radius: 100px;
-  }
-  .ebook-preview-nav { display: flex; align-items: center; justify-content: center; gap: 16px; margin-top: 18px; }
-  .ebook-preview-nav .slider-btn:disabled { opacity: 0.35; cursor: not-allowed; }
-  .ebook-preview-nav .slider-btn:disabled:hover { background: var(--white); border-color: var(--line); }
-  .ebook-preview-counter { font-size: 14px; font-weight: 600; color: var(--ink-soft); min-width: 54px; }
-  .ebook-preview-note { margin-top: 14px; font-size: 12.5px; color: var(--ink-soft); }
-
-  @media (max-width: 430px) {
-    .ebook-preview-card { padding: 22px 18px; }
+  // Stable per-session ID used to build unique, deduplicated Pixel event IDs —
+  // kept separate from main.js's tfr_session_id so the two flows never collide.
+  if (!storeGet("sessionStorage", "tfr_ebook_session_id")) {
+    storeSet("sessionStorage", "tfr_ebook_session_id", Date.now() + "_" + Math.random().toString(36).slice(2));
   }
 
-  /* ---- Student Reviews (reuses .review-card / .stars / .review-person /
-     .review-avatar from css/style.css — same components as the homepage
-     reviews section, just laid out as a static grid instead of a scroll-track
-     since there are fewer cards here) ---- */
-  .ebook-review-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; }
-  @media (max-width: 980px) { .ebook-review-grid { grid-template-columns: repeat(2, 1fr); } }
-  @media (max-width: 640px) { .ebook-review-grid { grid-template-columns: 1fr; } }
-  .ebook-review-grid .review-card { min-width: 0; width: 100%; }
+  /* ============ EBOOK PREVIEW NAVIGATOR ============
+     View-only page viewer for the "Preview the eBook" section. Pages are
+     pre-rendered images from the preview PDF (assets/ebook-preview/) — the
+     PDF itself is never linked from the page. Right-click/drag are disabled
+     on the image, and a tiled "PREVIEW" watermark (pure CSS) sits over every
+     page — casual-copy deterrents only. Completely separate from the
+     form/Razorpay/Pixel/Sheet logic below. (Moved above the form code,
+     unchanged, so it can never be skipped by an early return.) */
+  const previewImages = [
+    "assets/ebook-preview/alankaar-preview-1.webp",
+    "assets/ebook-preview/alankaar-preview-2.webp",
+    "assets/ebook-preview/alankaar-preview-3.webp",
+    "assets/ebook-preview/alankaar-preview-4.webp",
+    "assets/ebook-preview/alankaar-preview-5.webp",
+    "assets/ebook-preview/alankaar-preview-6.webp",
+    "assets/ebook-preview/alankaar-preview-7.webp"
+  ];
+  let previewIndex = 0;
+  const previewImg = document.getElementById("ebookPreviewImg");
+  const previewCounter = document.getElementById("previewCounter");
+  const previewPrevBtn = document.getElementById("previewPrevBtn");
+  const previewNextBtn = document.getElementById("previewNextBtn");
+  const previewWatermark = document.querySelector(".ebook-preview-watermark");
+  const PREVIEW_NO_WATERMARK_INDEXES = [previewImages.length - 1]; // last page only
 
-  /* ---- Payment recovery popup ----
-     Opens ONLY when the customer taps the floating "Payment failed? — Pay
-     here" button (never automatically). Reuses the site's colour tokens,
-     .btn/.btn-primary and the same overlay pattern as the certificate modal. */
-  .pay-recovery-overlay {
-    position: fixed; inset: 0; z-index: 1100;
-    background: rgba(20, 16, 12, 0.72);
-    display: flex; align-items: center; justify-content: center;
-    padding: 12px;
-    opacity: 0; pointer-events: none; visibility: hidden;
-    transition: opacity 0.25s var(--ease), visibility 0s linear 0.25s;
-  }
-  .pay-recovery-overlay.open { opacity: 1; pointer-events: auto; visibility: visible; transition: opacity 0.25s var(--ease); }
-  .pay-recovery {
-    position: relative; width: 100%; max-width: 440px;
-    max-height: calc(100vh - 24px); max-height: calc(100dvh - 24px);
-    overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain;
-    background: var(--white); border-radius: var(--radius-lg);
-    box-shadow: 0 24px 60px rgba(17,17,17,0.28);
-    padding: 26px 22px 22px; text-align: center;
-  }
-  .pay-recovery-close {
-    position: absolute; top: 10px; right: 10px;
-    width: 36px; height: 36px; border-radius: 50%;
-    background: var(--cream); border: 1px solid var(--line); color: var(--ink);
-    cursor: pointer; display: flex; align-items: center; justify-content: center;
-  }
-  .pr-icon {
-    width: 52px; height: 52px; border-radius: 50%; margin: 0 auto 12px;
-    background: #FDEDEC; color: #C0392B;
-    display: flex; align-items: center; justify-content: center;
-  }
-  .pay-recovery h3 { font-size: 22px; margin-bottom: 6px; }
-  .pr-lede { font-size: 14px; color: var(--ink-soft); margin-bottom: 18px; }
-  .pr-or {
-    display: flex; align-items: center; gap: 10px; margin: 20px 0 14px;
-    font-size: 11.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-soft);
-  }
-  .pr-or::before, .pr-or::after { content: ""; flex: 1; height: 1px; background: var(--line); }
-  .pr-amount { font-size: 14px; color: var(--ink-soft); margin-bottom: 14px; }
-  .pr-amount strong { font-family: var(--font-display); font-size: 20px; color: var(--ink); }
-  .pr-price-original { font-size: 15px; font-weight: 600; color: var(--ink-soft); text-decoration: line-through; opacity: 0.7; margin: 0 4px 0 2px; }
-  .pr-block { background: var(--cream); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; margin-bottom: 12px; }
-  .pr-label { font-size: 12px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--orange-deep); margin-bottom: 10px; }
-  .pr-qr {
-    display: block; margin: 0 auto;
-    width: min(220px, 62vw); height: auto; /* width/height attrs keep the aspect ratio — never stretched */
-    border-radius: 14px; background: #F3D38F;
-  }
-  .pr-note { font-size: 13px; color: var(--ink-soft); margin-top: 10px; }
-  .pr-upi-row { display: flex; align-items: center; gap: 8px; background: var(--white); border: 1.5px dashed var(--orange); border-radius: 12px; padding: 8px 8px 8px 14px; }
-  .pr-upi-id { flex: 1; min-width: 0; text-align: left; font-family: var(--font-display); font-weight: 700; font-size: 17px; color: var(--ink); word-break: break-all; user-select: all; -webkit-user-select: all; }
-  .pr-copy-btn { flex-shrink: 0; background: var(--orange); color: #fff; border: none; border-radius: 100px; padding: 10px 14px; font-weight: 700; font-size: 13px; cursor: pointer; }
-  .pr-copied { min-height: 18px; margin-top: 8px; font-size: 13px; font-weight: 700; color: #1F7A4D; }
-  .pr-payee { margin-top: 10px; padding: 10px 12px; border-radius: var(--radius); background: #EAF6EF; border: 1px solid #9FD3B4; font-size: 13px; color: #14563A; text-align: left; }
-  .pr-payee strong { color: #0F4A31; letter-spacing: 0.04em; }
-  .pr-payee span { display: block; margin-top: 3px; font-size: 12px; color: #3F6B55; }
-  .pr-after { text-align: left; font-size: 14px; color: var(--ink); margin-top: 16px; }
-  .pr-wa-btn {
-    display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%;
-    background: #1F7A4D; color: #fff; border-radius: 100px; padding: 14px 18px;
-    font-weight: 700; font-size: 14.5px; margin: 10px 0 12px; text-align: center;
-  }
-  .pr-steps { list-style: none; display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--ink-soft); }
-  .pr-steps li::before { content: "✓ "; color: var(--orange); font-weight: 700; }
-  .pr-support { margin-top: 14px; padding: 12px 0 0; border-top: 1px solid var(--line); font-size: 13px; color: var(--ink-soft); }
-  .pr-support-actions { display: flex; gap: 8px; justify-content: center; margin-top: 8px; flex-wrap: wrap; }
-  .pr-support-actions a { border: 1.5px solid var(--line); border-radius: 100px; padding: 8px 14px; font-weight: 700; color: var(--ink); font-size: 13px; }
-  .pr-already {
-    background: #EAF6EF; border: 1.5px solid #9FD3B4; border-radius: var(--radius);
-    padding: 14px 16px; margin-top: 14px; text-align: left; font-size: 14px; color: #14563A;
-  }
-  .pr-already strong { display: block; font-size: 15px; margin-bottom: 4px; color: #0F4A31; }
-  .pr-already a { display: inline-flex; align-items: center; gap: 6px; margin-top: 10px; font-weight: 700; color: #fff; background: #1F7A4D; border-radius: 100px; padding: 9px 16px; font-size: 13.5px; }
-
-  /* ---- Floating "Payment failed? — Pay here" button ----
-     Sits directly above the existing WhatsApp float (exact position is set by
-     js/ebook.js from the WhatsApp button's real size; the bottom values here
-     are the fallback). Full text always visible. The ring is a slowly
-     rotating conic-gradient border + soft blurred halo of the same gradient. */
-  @property --pr-angle { syntax: "<angle>"; initial-value: 0deg; inherits: false; }
-  .pay-help-float {
-    position: fixed; right: 24px; bottom: 104px; z-index: 861;
-    padding: 2px; border: none; border-radius: 100px; cursor: pointer;
-    background: conic-gradient(from var(--pr-angle), rgba(255,122,0,0.15) 0deg, var(--orange) 70deg, #FFD3A8 110deg, rgba(255,122,0,0.15) 170deg, rgba(255,122,0,0.15) 360deg);
-    animation: pr-spin 4s linear infinite;
-    box-shadow: 0 10px 26px rgba(255,122,0,0.28);
-    transition: opacity 0.25s var(--ease), transform 0.25s var(--ease);
-    -webkit-tap-highlight-color: transparent;
-  }
-  .pay-help-float::before {
-    content: ""; position: absolute; inset: -3px; border-radius: inherit; z-index: -1;
-    background: conic-gradient(from var(--pr-angle), transparent 0deg, rgba(255,122,0,0.55) 80deg, transparent 170deg, transparent 360deg);
-    filter: blur(7px); opacity: 0.7;
-    animation: pr-spin 4s linear infinite;
-  }
-  .pay-help-float-inner {
-    display: flex; align-items: center; gap: 8px;
-    background: var(--ink); color: #fff; border-radius: 100px;
-    padding: 11px 18px; font-family: var(--font-body); font-size: 13.5px; font-weight: 700; white-space: nowrap;
-  }
-  .pay-help-float-inner .pay-here { color: #FFB066; }
-  .pay-help-float:hover { transform: translateY(-2px); }
-  .pay-help-float:focus-visible { outline: 3px solid var(--orange-light); outline-offset: 3px; }
-  .pay-help-float.is-tucked { opacity: 0; pointer-events: none; transform: translateY(8px); }
-  @keyframes pr-spin { to { --pr-angle: 360deg; } }
-  @media (max-width: 760px) {
-    .pay-help-float { right: 16px; bottom: calc(150px + env(safe-area-inset-bottom, 0px)); }
-    .pay-help-float-inner { padding: 10px 15px; font-size: 13px; }
-  }
-
-  @media (max-width: 380px) {
-    .pay-recovery { padding: 22px 16px 18px; }
-    .pr-upi-id { font-size: 15px; }
-  }
-</style>
-</head>
-<body>
-
-<!-- ============================= HEADER (identical to index.html) ============================= -->
-<header class="site-header" id="siteHeader">
-  <div class="container">
-    <a href="index.html" class="logo">The Flute <span>Room</span></a>
-    <nav class="nav-links">
-      <a href="index.html#benefits">Why Us</a>
-      <a href="index.html#curriculum">Curriculum</a>
-      <a href="index.html#pricing">Classes</a>
-      <a href="alankaars-ebook.html">eBook</a>
-      <a href="index.html#reviews">Reviews</a>
-      <a href="index.html#faq">FAQ</a>
-    </nav>
-    <div class="header-cta">
-      <a href="index.html#enroll" class="btn btn-outline">Flute Classes</a>
-      <a href="#buy" class="btn btn-primary">Get the eBook</a>
-      <button class="nav-toggle" id="navToggle" aria-label="Open menu">
-        <span></span><span></span><span></span>
-      </button>
-    </div>
-  </div>
-</header>
-
-<div class="mobile-drawer" id="mobileDrawer">
-  <button class="drawer-close" id="drawerClose" aria-label="Close menu">&times;</button>
-  <a href="index.html#benefits">Why Us</a>
-  <a href="index.html#curriculum">Curriculum</a>
-  <a href="index.html#pricing">Classes</a>
-  <a href="alankaars-ebook.html">eBook</a>
-  <a href="index.html#reviews">Reviews</a>
-  <a href="index.html#faq">FAQ</a>
-  <a href="#buy" class="btn btn-primary btn-block">Get the eBook</a>
-</div>
-
-<!-- ============================= EBOOK HERO ============================= -->
-<section class="ebook-hero">
-  <div class="container">
-    <div class="ebook-hero-copy reveal">
-      <div class="eyebrow">Digital eBook · Flute Practice</div>
-      <h1>30 Alankaras for Flute</h1>
-      <p class="lede">Build stronger fundamentals. Train your ears. Improve your swar identification and finger speed — with 30 structured alankara exercises you can practice at your own pace.</p>
-
-      <div class="ebook-price-block">
-        <div class="ebook-price-main">
-          <span class="ebook-price" data-ebook-price>₹399</span>
-          <span class="ebook-price-original">₹1,299</span>
-        </div>
-        <div class="ebook-price-sub">
-          <span class="ebook-save-badge">You Save ₹900</span>
-          <span class="ebook-access-pill">🔒 Lifetime Access</span>
-        </div>
-        <span class="ebook-countdown" id="ebookCountdown">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>
-          Offer ends in <span class="ebook-countdown-time" id="ebookCountdownTime">24:00:00</span>
-        </span>
-      </div>
-
-      <div class="hero-actions">
-        <a href="#buy" class="btn btn-primary">Get the eBook — <span data-ebook-price>₹399</span></a>
-        <a href="#ebook-preview" class="btn btn-outline">See What's Inside</a>
-      </div>
-
-      <div class="ebook-trust">
-        <span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>Instant access after payment</span>
-        <span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>Digital PDF, downloadable</span>
-        <span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>No shipping needed</span>
-      </div>
-    </div>
-
-    <div class="ebook-showcase reveal">
-      <div class="ebook-cover-frame">
-        <img id="ebookCoverImg" src="assets/alankaars-ebook-cover.png" alt="30 Alankaras for Flute — eBook cover by The Flute Room">
-      </div>
-      <div class="ebook-ground-shadow" aria-hidden="true"></div>
-    </div>
-  </div>
-</section>
-
-<!-- ============================= WHAT IS ALANKAAR? (new) =============================
-     Reuses the existing .why-grid / .why-list / .why-item / .why-num components
-     (already defined in css/style.css, same as the homepage's "Why Unlimited"
-     section) — no new component styling, just new copy. -->
-<section id="what-is-alankaar">
-  <div class="container why-grid">
-    <div class="reveal">
-      <div class="eyebrow">Getting Started</div>
-      <h2>What is an Alankaar?</h2>
-      <p style="color:var(--ink-soft); margin-top:10px;">
-        An alankaar is a structured sequence of swars (notes) that you practice repeatedly on your flute. Instead of jumping straight into songs, alankaars give you a simple, repeatable pattern to train your fingers and ears together, one step at a time.
-      </p>
-      <p style="color:var(--ink-soft); margin-top:14px;">
-        <strong>30 Alankaras for Flute</strong> brings together 30 such patterns that you can practice progressively, alongside your regular flute practice.
-      </p>
-    </div>
-
-    <div class="why-list reveal-stagger">
-      <div class="why-item">
-        <span class="why-num">01</span>
-        <div>
-          <h4>Finger Coordination &amp; Speed</h4>
-          <p>Repeating a pattern helps build the muscle memory behind smoother, more confident finger movement over time.</p>
-        </div>
-      </div>
-      <div class="why-item">
-        <span class="why-num">02</span>
-        <div>
-          <h4>Smoother Swar Transitions</h4>
-          <p>Regular practice helps your fingers move between notes with less hesitation and more control.</p>
-        </div>
-      </div>
-      <div class="why-item">
-        <span class="why-num">03</span>
-        <div>
-          <h4>Ear Training &amp; Swar Identification</h4>
-          <p>Playing the same patterns often trains your ear to recognize swars, an important part of overall musical understanding.</p>
-        </div>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- ============================= WHAT IT HELPS YOU DEVELOP ============================= -->
-<section class="alt" id="benefits-ebook">
-  <div class="container">
-    <div class="section-head center reveal" style="margin-left:auto;margin-right:auto;">
-      <div class="eyebrow">What You'll Develop</div>
-      <h2>Master the exercises that build real flute control</h2>
-      <p>With 30 structured alankaras, you'll build the fundamentals that make everything else on the flute easier.</p>
-    </div>
-    <div class="ebook-benefit-grid reveal-stagger">
-      <div class="benefit-card">
-        <div class="benefit-icon">🎵</div>
-        <h3>Play Songs by Listening</h3>
-        <p>Train your musical ear so you can listen to a song and gradually work out the notes, instead of depending entirely on written notation.</p>
-      </div>
-      <div class="benefit-card">
-        <div class="benefit-icon">👂</div>
-        <h3>Ear Training</h3>
-        <p>Develop your ability to hear and recognize musical patterns and notes with regular, structured practice.</p>
-      </div>
-      <div class="benefit-card">
-        <div class="benefit-icon">🎯</div>
-        <h3>Swar Identification</h3>
-        <p>Improve your ability to identify swars accurately while listening to music, a core skill for every flute player.</p>
-      </div>
-      <div class="benefit-card">
-        <div class="benefit-icon">⚡</div>
-        <h3>Increased Finger Speed</h3>
-        <p>The structured alankara exercises help develop smoother, faster, and more confident finger movement.</p>
-      </div>
-      <div class="benefit-card">
-        <div class="benefit-icon">🎶</div>
-        <h3>Stronger Musical Foundation</h3>
-        <p>Build better breath control, coordination, note transitions, and overall flute technique — one exercise at a time.</p>
-      </div>
-      <div class="benefit-card">
-        <div class="benefit-icon">💡</div>
-        <h3>Greater Confidence</h3>
-        <p>A clear, repeatable practice structure so you always know exactly what to work on next.</p>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- ============================= EBOOK PREVIEW (new) =============================
-     View-only preview built from the pages in the uploaded preview PDF, shown as
-     optimized images (not the PDF itself) so the original file is never linked
-     from the page. Right-click, drag, and pointer events on the image are
-     disabled as a casual-copy deterrent — see js/ebook.js for the note on limits. -->
-<section id="ebook-preview">
-  <div class="container">
-    <div class="section-head center reveal" style="margin-left:auto;margin-right:auto;">
-      <div class="eyebrow">Free Preview</div>
-      <h2>Preview the eBook</h2>
-      <p>Take a look inside before you purchase.</p>
-    </div>
-
-    <div class="ebook-preview-card reveal">
-      <div class="ebook-preview-viewer">
-        <span class="ebook-preview-badge">Free Preview</span>
-        <img id="ebookPreviewImg" src="assets/ebook-preview/alankaar-preview-1.webp" alt="30 Alankaras for Flute — eBook preview page" oncontextmenu="return false;" draggable="false">
-        <div class="ebook-preview-watermark" aria-hidden="true"></div>
-      </div>
-      <div class="ebook-preview-nav">
-        <button type="button" class="slider-btn" id="previewPrevBtn" aria-label="Previous preview page">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
-        </button>
-        <span class="ebook-preview-counter" id="previewCounter">1 / 7</span>
-        <button type="button" class="slider-btn" id="previewNextBtn" aria-label="Next preview page">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
-        </button>
-      </div>
-      <p class="ebook-preview-note">Sample pages shown for preview only, this is a view-only preview and not the downloadable eBook.</p>
-    </div>
-  </div>
-</section>
-
-<!-- ============================= PRODUCT INFORMATION ============================= -->
-<section id="product-info">
-  <div class="container">
-    <div class="section-head center reveal" style="margin-left:auto;margin-right:auto;">
-      <div class="eyebrow">Product Information</div>
-      <h2>30 Alankaras for Flute</h2>
-    </div>
-    <div class="ebook-info-card reveal">
-      <ul class="ebook-info-list">
-        <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg><span><strong>Format:</strong> Digital eBook (PDF)</span></li>
-        <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg><span><strong>Access:</strong> Lifetime access, no renewals</span></li>
-        <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg><span><strong>Delivery:</strong> Instant access after successful payment</span></li>
-        <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg><span><strong>Downloadable:</strong> Yes, keep it on any device</span></li>
-        <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg><span><strong>Designed for:</strong> Flute learners at every stage</span></li>
-        <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg><span><strong>Price:</strong> <span data-ebook-price>₹399</span></span></li>
-        <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg><span><strong>Shipping:</strong> None — this is a digital product</span></li>
-      </ul>
-    </div>
-  </div>
-</section>
-
-<!-- ============================= EBOOK STUDENT REVIEWS (new) =============================
-     Reuses the existing .review-card component from css/style.css (same one
-     used on the homepage's Reviews section) — laid out as a static 3-column
-     grid here since there are only a handful of reviews for this product. -->
-<section id="ebook-reviews">
-  <div class="container">
-    <div class="section-head center reveal" style="margin-left:auto;margin-right:auto;">
-      <div class="eyebrow">Student Reviews</div>
-      <h2>What students are saying</h2>
-      <p>A few notes from students using the eBook alongside their practice.</p>
-    </div>
-    <div class="ebook-review-grid reveal-stagger">
-      <div class="review-card">
-        <div class="stars">★★★★★</div>
-        <p>"I've been playing casually for a couple of years but always felt shaky moving between notes. Got through the first ten alankaras and my Sa-Re-Ga transitions already feel less clunky. Wish I'd found this earlier."</p>
-        <div class="review-person"><div class="review-avatar">P</div><div><div class="review-name">Priya Nair</div><div class="review-loc">Kochi</div></div></div>
-      </div>
-      <div class="review-card">
-        <div class="stars">★★★★☆</div>
-        <p>"Bought it on a whim after seeing an ad, didn't expect much for ₹399. The patterns are laid out clearly and it's easy to follow without a teacher around. Only wish there were a few more advanced ones toward the end."</p>
-        <div class="review-person"><div class="review-avatar">A</div><div><div class="review-name">Arjun Verma</div><div class="review-loc">Lucknow</div></div></div>
-      </div>
-      <div class="review-card">
-        <div class="stars">★★★★★</div>
-        <p>"My son is learning bansuri and his teacher recommended daily alankaar practice. This gives us something structured to work through between his classes. He's slowly getting faster at the ones we've covered so far."</p>
-        <div class="review-person"><div class="review-avatar">M</div><div><div class="review-name">Meenal Joshi</div><div class="review-loc">Nagpur</div></div></div>
-      </div>
-      <div class="review-card">
-        <div class="stars">★★★★★</div>
-        <p>"Simple, no-fuss PDF. I print a couple of pages at a time and keep them on my flute stand. Nothing fancy about it, it just does what it says on the page."</p>
-        <div class="review-person"><div class="review-avatar">D</div><div><div class="review-name">Devansh Rao</div><div class="review-loc">Hyderabad</div></div></div>
-      </div>
-      <div class="review-card">
-        <div class="stars">★★★★★</div>
-        <p>"Was struggling to find swars by ear. A few weeks into these patterns and I can anticipate where my fingers need to go before I've fully thought about it. Still very much a beginner, but this genuinely helped."</p>
-        <div class="review-person"><div class="review-avatar">K</div><div><div class="review-name">Kavya Iyer</div><div class="review-loc">Chennai</div></div></div>
-      </div>
-      <div class="review-card">
-        <div class="stars">★★★★★</div>
-        <p>"Picked this up along with the monthly class plan. My teacher suggested using a couple of pages as warm-up before each session. Good value for what it costs."</p>
-        <div class="review-person"><div class="review-avatar">R</div><div><div class="review-name">Rahul Bhatt</div><div class="review-loc">Jaipur</div></div></div>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- ============================= CHECKOUT ============================= -->
-<section class="alt" id="buy">
-  <div class="container">
-    <div class="section-head center reveal" style="margin-left:auto;margin-right:auto;">
-      <div class="eyebrow">Get Instant Access</div>
-      <h2>Get the eBook — <span data-ebook-price>₹399</span></h2>
-      <p>Enter your details below — your download link is sent straight to your email, and shown immediately on the next page too.</p>
-    </div>
-
-    <div class="form-card reveal">
-      <div class="ebook-checkout-summary">
-        <span>30 Alankaras for Flute · Lifetime Access</span>
-        <strong><span class="ebook-checkout-price-original">₹1,299</span><span data-ebook-price>₹399</span></strong>
-      </div>
-
-      <form id="ebookForm" novalidate>
-        <div class="form-field full" style="margin-bottom:20px;">
-          <label for="fullName">Full Name</label>
-          <input type="text" id="fullName" name="fullName" placeholder="Your full name" required>
-          <span class="form-error" data-error-for="fullName"></span>
-        </div>
-        <div class="form-field full" style="margin-bottom:20px;">
-          <label for="email">Email Address</label>
-          <input type="email" id="email" name="email" placeholder="you@example.com" required>
-          <span class="form-error" data-error-for="email"></span>
-        </div>
-        <div class="form-field full" style="margin-bottom:8px;">
-          <label for="whatsapp">WhatsApp Number</label>
-          <input type="tel" id="whatsapp" name="whatsapp" placeholder="10-digit mobile number" required>
-          <span class="form-error" data-error-for="whatsapp"></span>
-        </div>
-
-        <button type="submit" class="btn btn-primary btn-block" id="ebookSubmitBtn" style="margin-top:18px;">Get the eBook — <span data-ebook-price>₹399</span></button>
-        <div class="form-status" id="ebookFormStatus"></div>
-        <p style="font-size:12px;color:var(--ink-soft);text-align:center;margin-top:14px;">
-          By purchasing you agree to our <a href="policies/terms.html" style="text-decoration:underline;">Terms</a> and <a href="policies/refund.html" style="text-decoration:underline;">Refund Policy</a>.
-        </p>
-      </form>
-    </div>
-  </div>
-</section>
-
-<!-- ============================= FOOTER (identical to index.html) ============================= -->
-<footer>
-  <div class="container">
-    <div class="footer-grid">
-      <div class="footer-brand">
-        <a href="index.html" class="logo">The Flute <span>Room</span></a>
-        <p>Online flute classes for beginners across India. Unlimited live sessions, personalized guidance, and a supportive path to your first song.</p>
-      </div>
-      <div>
-        <h5>Explore</h5>
-        <ul>
-          <li><a href="index.html#pricing">Classes</a></li>
-          <li><a href="alankaars-ebook.html">eBook</a></li>
-          <li><a href="index.html#reviews">Reviews</a></li>
-          <li><a href="index.html#faq">FAQ</a></li>
-        </ul>
-      </div>
-      <div>
-        <h5>Legal</h5>
-        <ul>
-          <li><a href="policies/refund.html">Refund Policy</a></li>
-          <li><a href="policies/terms.html">Terms & Conditions</a></li>
-          <li><a href="policies/privacy.html">Privacy Policy</a></li>
-        </ul>
-      </div>
-      <div>
-        <h5>Contact</h5>
-        <ul>
-          <li><a href="mailto:prateek132008@gmail.com">prateek132008@gmail.com</a></li>
-          <li><a href="https://wa.me/918709268496" target="_blank" rel="noopener">+91 87092 68496</a></li>
-        </ul>
-      </div>
-    </div>
-    <div class="footer-bottom">
-      <span>© <span id="year"></span> The Flute Room. All rights reserved.</span>
-      <span>Made for beginners, by people who love the flute.</span>
-    </div>
-  </div>
-</footer>
-
-<!-- ============================= PAYMENT RECOVERY POPUP =============================
-     Opened ONLY when the customer taps the floating "Payment failed? — Pay
-     here" button below — never automatically.
-     QR image / UPI ID / WhatsApp / phone come from js/config.js → PAYMENT_RECOVERY. -->
-<div class="pay-recovery-overlay" id="payRecovery" role="dialog" aria-modal="true" aria-labelledby="payRecoveryTitle" aria-hidden="true">
-  <div class="pay-recovery">
-    <button type="button" class="pay-recovery-close" id="payRecoveryClose" aria-label="Close">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
-    </button>
-
-    <div class="pr-icon" aria-hidden="true">
-      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="9"/><path d="M12 7.5v5.5M12 16.5h.01"/></svg>
-    </div>
-    <h3 id="payRecoveryTitle">Payment failed?</h3>
-    <p class="pr-lede" id="payRecoveryLede">Don't worry — complete your payment manually using UPI below, or retry the payment.</p>
-
-    <div class="pr-amount">Amount to pay: <span class="pr-price-original">₹1,299</span> <strong data-ebook-price>₹399</strong></div>
-
-    <div class="pr-block">
-      <div class="pr-label">Option 1 · Scan &amp; Pay</div>
-      <img class="pr-qr" id="payQrImg" src="" width="400" height="477" alt="UPI QR code to pay The Flute Room" loading="lazy" decoding="async">
-      <p class="pr-note">Scan the QR code using any UPI app and pay <strong data-ebook-price>₹399</strong>.</p>
-    </div>
-
-    <div class="pr-block">
-      <div class="pr-label">Option 2 · Pay using UPI ID</div>
-      <div class="pr-upi-row">
-        <span class="pr-upi-id" id="payUpiId"></span>
-        <button type="button" class="pr-copy-btn" id="payCopyBtn">Copy UPI ID</button>
-      </div>
-      <div class="pr-copied" id="payCopied" role="status" aria-live="polite"></div>
-    </div>
-
-    <div class="pr-block" id="payPhoneBlock">
-      <div class="pr-label">Option 3 · Pay to Phone Number</div>
-      <div class="pr-upi-row">
-        <span class="pr-upi-id" id="payPhoneNumber"></span>
-        <button type="button" class="pr-copy-btn" id="payCopyPhoneBtn">Copy Number</button>
-      </div>
-      <div class="pr-copied" id="payCopiedPhone" role="status" aria-live="polite"></div>
-      <p class="pr-payee">Name shown in your payment app: <strong id="payPhoneName"></strong>
-        <span>This is our official payment account — you can pay safely.</span></p>
-      <p class="pr-note">Open any UPI app → <strong>Pay to phone number</strong> → paste the number → pay <strong data-ebook-price>₹399</strong>.</p>
-    </div>
-
-    <div class="pr-after">
-      <strong>After completing the payment,</strong> send the payment screenshot on WhatsApp.
-      <a class="pr-wa-btn" id="payWhatsappBtn" href="#" target="_blank" rel="noopener">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.5 2 2 6.5 2 12c0 1.8.5 3.5 1.3 5L2 22l5.2-1.3c1.4.8 3.1 1.3 4.8 1.3 5.5 0 10-4.5 10-10S17.5 2 12 2z"/></svg>
-        Send Payment Screenshot on WhatsApp
-      </a>
-      <ul class="pr-steps">
-        <li>We verify your payment from the screenshot</li>
-        <li>Your eBook access is then sent to you on WhatsApp and email</li>
-      </ul>
-    </div>
-
-    <div class="pr-support">
-      Having trouble with payment?<br>Call / WhatsApp: <strong id="paySupportNumber"></strong>
-      <div class="pr-support-actions">
-        <a id="payCallLink" href="#">📞 Call</a>
-        <a id="paySupportWhatsapp" href="#" target="_blank" rel="noopener">💬 WhatsApp</a>
-      </div>
-    </div>
-
-    <div class="pr-or">or</div>
-
-    <button type="button" class="btn btn-primary btn-block" id="payRetryBtn">Retry Payment</button>
-
-    <div class="pr-already">
-      <strong>Already paid?</strong>
-      Send your payment screenshot on WhatsApp and we'll verify it and provide your access.
-      <br><a id="payAlreadyPaidWa" href="#" target="_blank" rel="noopener">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.5 2 2 6.5 2 12c0 1.8.5 3.5 1.3 5L2 22l5.2-1.3c1.4.8 3.1 1.3 4.8 1.3 5.5 0 10-4.5 10-10S17.5 2 12 2z"/></svg>
-        Send Screenshot on WhatsApp
-      </a>
-    </div>
-  </div>
-</div>
-
-<!-- ============================= FLOATING PAYMENT RECOVERY BUTTON =============================
-     Permanent recovery path — opens the popup above when tapped. -->
-<button type="button" class="pay-help-float" id="payHelpFloat" aria-haspopup="dialog" aria-controls="payRecovery">
-  <span class="pay-help-float-inner">Payment failed? — <span class="pay-here">Pay here</span></span>
-</button>
-
-<!-- ============================= WHATSAPP SUPPORT FLOAT ============================= -->
-<button class="whatsapp-float" id="supportFloat">
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.5 2 2 6.5 2 12c0 1.8.5 3.5 1.3 5L2 22l5.2-1.3c1.4.8 3.1 1.3 4.8 1.3 5.5 0 10-4.5 10-10S17.5 2 12 2z"/></svg>
-  <span class="label">Questions about the eBook? Chat with us</span>
-</button>
-
-<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
-<script src="js/checkout-loading.js" defer></script>
-<script src="js/ebook.js" defer></script>
-
-<!-- ============ OFFER COUNTDOWN TIMER ============
-     Fully self-contained — does not touch config.js, ebook.js, the form,
-     Razorpay, or Meta Pixel. Uses its own localStorage key so it can never
-     collide with the eBook success-page keys (tfr_ebook_success_payload,
-     tfr_ebook_purchase_fired_*).
-
-     Behavior: on first visit, sets a 24-hour target end time and stores it.
-     On every later visit/refresh, reads that same stored end time, so the
-     countdown keeps going down correctly instead of resetting to 24:00:00.
-     Once it hits 00:00:00, it automatically starts a fresh 24-hour countdown
-     and repeats indefinitely. -->
-<script>
-(function () {
-  var STORAGE_KEY = "tfr_ebook_offer_end";
-  var DURATION_MS = 24 * 60 * 60 * 1000;
-
-  function getEndTime() {
-    var stored = parseInt(localStorage.getItem(STORAGE_KEY), 10);
-    if (!stored || isNaN(stored) || stored <= Date.now()) {
-      stored = Date.now() + DURATION_MS;
-      localStorage.setItem(STORAGE_KEY, String(stored));
+  function updatePreview() {
+    if (!previewImg) return;
+    previewImg.src = previewImages[previewIndex];
+    if (previewCounter) previewCounter.textContent = (previewIndex + 1) + " / " + previewImages.length;
+    if (previewPrevBtn) previewPrevBtn.disabled = previewIndex === 0;
+    if (previewNextBtn) previewNextBtn.disabled = previewIndex === previewImages.length - 1;
+    if (previewWatermark) {
+      previewWatermark.classList.toggle("is-hidden", PREVIEW_NO_WATERMARK_INDEXES.includes(previewIndex));
     }
-    return stored;
   }
 
-  var endTime = getEndTime();
-  var timeEl = document.getElementById("ebookCountdownTime");
-  if (!timeEl) return;
+  if (previewImg) {
+    previewImg.addEventListener("dragstart", (e) => e.preventDefault());
+    if (previewPrevBtn) previewPrevBtn.addEventListener("click", () => {
+      if (previewIndex > 0) { previewIndex--; updatePreview(); }
+    });
+    if (previewNextBtn) previewNextBtn.addEventListener("click", () => {
+      if (previewIndex < previewImages.length - 1) { previewIndex++; updatePreview(); }
+    });
+    updatePreview();
+  }
 
-  function pad(n) { return n < 10 ? "0" + n : String(n); }
+  /* ============ WHATSAPP SUPPORT FLOAT ============ */
+  const supportFloat = document.getElementById("supportFloat");
+  if (supportFloat) {
+    supportFloat.addEventListener("click", () => {
+      const msg = encodeURIComponent("Hi, I have a question about the 30 Alankaras for Flute eBook.");
+      window.open(`https://wa.me/${SITE_CONFIG.WHATSAPP_NUMBER}?text=${msg}`, "_blank");
+    });
+  }
 
-  function tick() {
-    var remaining = endTime - Date.now();
-    if (remaining <= 0) {
-      endTime = Date.now() + DURATION_MS;
-      localStorage.setItem(STORAGE_KEY, String(endTime));
-      remaining = DURATION_MS;
+  /* ============ 1. FORM + VALIDATION ============ */
+  const form = document.getElementById("ebookForm");
+  const submitBtn = document.getElementById("ebookSubmitBtn");
+  const formStatus = document.getElementById("ebookFormStatus");
+  if (!form) return;
+
+  const SUCCESS_KEY = "tfr_ebook_success_payload";
+  const ATTEMPT_KEY = "tfr_ebook_attempt";
+  const ATTEMPT_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+  const ORDER_WAIT_MS = 6000; // hard cap; the order is normally pre-fetched while the form is filled
+
+  function showError(fieldName, message) {
+    const el = form.querySelector(`[data-error-for="${fieldName}"]`);
+    if (el) el.textContent = message || "";
+  }
+  // Visual-only button countdown (js/checkout-loading.js).
+  // Guarded so it can never throw into, or delay, the payment flow.
+  function loadingScreen(on) {
+    try {
+      const o = window.TFRCheckoutLoading;
+      if (o) { if (on) o.show(); else o.hide(); }
+    } catch (e) { /* visual only */ }
+  }
+  function resetButton() {
+    loadingScreen(false);
+    submitBtn.disabled = false;
+    submitBtn.textContent = "Get the eBook — ₹" + EBOOK_CONFIG.EBOOK_PRICE;
+  }
+  function setStatus(text, color) {
+    formStatus.textContent = text;
+    formStatus.style.color = color || "var(--ink-soft)";
+  }
+
+  /* ============ META EMQ HELPERS ============ */
+  function getCookie(name) {
+    const match = document.cookie.match(new RegExp("(^| )" + name + "=([^;]+)"));
+    return match ? decodeURIComponent(match[2]) : "";
+  }
+  function getFbc() {
+    const existing = getCookie("_fbc");
+    if (existing) return existing;
+    const params = new URLSearchParams(window.location.search);
+    const fbclid = params.get("fbclid");
+    if (!fbclid) return "";
+    // Meta's documented fbc format: fb.{subdomainIndex}.{creationTime}.{fbclid}
+    return `fb.1.${Date.now()}.${fbclid}`;
+  }
+  function splitName(fullName) {
+    const parts = (fullName || "").trim().split(/\s+/);
+    return { firstName: parts[0] || "", lastName: parts.slice(1).join(" ") || "" };
+  }
+  // Matches the Apps Script normalizePhone() exactly (assumes India/+91).
+  function normalizePhoneForPixel(phone) {
+    const digits = (phone || "").replace(/\D/g, "");
+    if (digits.length === 10) return "91" + digits;
+    return digits;
+  }
+
+  // FIXED: was `EBK-<year>-<4 random digits>` — only 9,000 possible IDs a
+  // year, so two customers could share an ID and the sheet upsert would
+  // overwrite one customer's row with another's. Now time + random based.
+  function generateAttemptId() {
+    let rand = "";
+    try {
+      const bytes = new Uint8Array(4);
+      window.crypto.getRandomValues(bytes);
+      rand = Array.from(bytes, b => b.toString(36).padStart(2, "0")).join("");
+    } catch (e) {
+      rand = Math.random().toString(36).slice(2, 10);
     }
-    var totalSeconds = Math.floor(remaining / 1000);
-    var h = Math.floor(totalSeconds / 3600);
-    var m = Math.floor((totalSeconds % 3600) / 60);
-    var s = totalSeconds % 60;
-    timeEl.textContent = pad(h) + ":" + pad(m) + ":" + pad(s);
+    return ("EBK-" + Date.now().toString(36) + "-" + rand).toUpperCase().slice(0, 36);
   }
 
-  tick();
-  setInterval(tick, 1000);
-})();
-</script>
-</body>
-</html>
+  function validateForm(data) {
+    let valid = true;
+    ["fullName", "email", "whatsapp"].forEach(f => showError(f, ""));
+
+    if (!data.fullName || data.fullName.trim().length < 2) { showError("fullName", "Please enter your full name."); valid = false; }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email || "")) { showError("email", "Please enter a valid email — your eBook link is sent here."); valid = false; }
+    if (!/^\d{10}$/.test((data.whatsapp || "").replace(/\D/g, "").slice(-10))) { showError("whatsapp", "Please enter a valid 10-digit WhatsApp number."); valid = false; }
+    return valid;
+  }
+
+  /* ============ ATTEMPT STATE (one purchase attempt, reused across retries) ============ */
+  function loadAttempt() {
+    try {
+      const a = JSON.parse(storeGet("localStorage", ATTEMPT_KEY) || "null");
+      if (a && a.attemptId && Date.now() - (a.createdAt || 0) < ATTEMPT_MAX_AGE_MS) return a;
+    } catch (e) { /* ignore */ }
+    return null;
+  }
+  function saveAttempt(a) { storeSet("localStorage", ATTEMPT_KEY, JSON.stringify(a)); }
+
+  // In-memory copy too, so everything still works if storage is unavailable.
+  let currentAttempt = loadAttempt();
+  let orderPromise = null;
+
+  /* Creates (once) the Razorpay order for this attempt via Apps Script.
+     Concurrent callers share the same promise — never two orders at once. */
+  function ensureOrder() {
+    if (currentAttempt && currentAttempt.rzpOrderId) return Promise.resolve(currentAttempt);
+    if (orderPromise) return orderPromise;
+
+    if (!currentAttempt) {
+      currentAttempt = { attemptId: generateAttemptId(), createdAt: Date.now() };
+      saveAttempt(currentAttempt);
+    }
+    const attempt = currentAttempt;
+
+    orderPromise = gasCall({ action: "createOrder", attemptId: attempt.attemptId }, 15000)
+      .then(res => {
+        if (!res || res.status !== "ok" || !res.rzpOrderId) throw new Error("createOrder failed: " + JSON.stringify(res));
+        attempt.rzpOrderId = res.rzpOrderId;
+        if (res.attemptId) attempt.attemptId = res.attemptId;
+        saveAttempt(attempt);
+        return attempt;
+      })
+      .finally(() => { orderPromise = null; });
+    return orderPromise;
+  }
+
+  function withTimeout(promise, ms) {
+    return new Promise((resolve, reject) => {
+      const t = setTimeout(() => reject(new Error("timeout")), ms);
+      promise.then(v => { clearTimeout(t); resolve(v); }, e => { clearTimeout(t); reject(e); });
+    });
+  }
+
+  // Pre-fetch the order in the background the moment the customer starts
+  // filling the form, so it is normally ready before they press the button.
+  form.addEventListener("focusin", () => {
+    ensureOrder().catch(err => console.warn("Order pre-fetch failed (will retry on submit):", err));
+  }, { once: true });
+
+  let submitting = false;
+  let lastCheckout = null; // { data, attempt, meta } of the latest checkout — used by Retry
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (submitting || checkoutOpen || completed) return; // no double checkout instances
+
+    const formData = new FormData(form);
+    const data = Object.fromEntries(formData.entries());
+
+    if (!validateForm(data)) {
+      setStatus("Please fix the highlighted fields above.", "#C0392B");
+      return;
+    }
+
+    submitting = true;
+    try {
+      // ---- Meta Pixel (Advanced Matching + Lead + InitiateCheckout).
+      // Wrapped so a broken/blocked Pixel can NEVER stop checkout opening. ----
+      try {
+        // ---- Advanced Matching (unchanged) ----
+        const { firstName, lastName } = splitName(data.fullName);
+        if (typeof fbq === "function") {
+          fbq("set", "userData", {
+            em: data.email,
+            ph: normalizePhoneForPixel(data.whatsapp),
+            fn: firstName,
+            ln: lastName,
+            external_id: (data.email || "").trim().toLowerCase()
+          });
+        }
+
+        // ---- Fire Lead + InitiateCheckout ONLY here, after the user submits the form ----
+        firePixelLead(data);
+        firePixelInitiateCheckout();
+      } catch (pixelErr) {
+        console.warn("Meta Pixel error (ignored, checkout continues):", pixelErr);
+      }
+
+      submitBtn.disabled = true;
+      submitBtn.textContent = "Preparing payment...";
+      loadingScreen(true);
+      formStatus.textContent = "";
+
+      const fbp = getCookie("_fbp");
+      const fbc = getFbc();
+      const userAgent = navigator.userAgent;
+
+      // ---- Get the Razorpay order (usually already pre-fetched). Capped wait:
+      // if Apps Script is slow or down, open an order-less checkout rather
+      // than blocking the sale; the server still verifies + captures it. ----
+      let attempt;
+      try {
+        attempt = await withTimeout(ensureOrder(), ORDER_WAIT_MS);
+      } catch (err) {
+        console.warn("Razorpay order not available in time — opening checkout without order_id:", err);
+        if (!currentAttempt) {
+          currentAttempt = { attemptId: generateAttemptId(), createdAt: Date.now() };
+        }
+        attempt = currentAttempt;
+      }
+
+      // (Retry safety: the "was this order already paid?" check now runs IN
+      // PARALLEL after checkout opens — see openRazorpayCheckout — instead of
+      // being awaited here, so it can never delay the payment window.
+      // Razorpay itself also refuses a second payment on an already-paid order.)
+      const isRetryOfOpenedOrder = !!(attempt.rzpOrderId && attempt.opened);
+
+      attempt.customer = { fullName: data.fullName, email: data.email, whatsapp: data.whatsapp };
+      saveAttempt(attempt);
+
+      // ---- Lead row as "Pending" — fire-and-forget, never blocks checkout.
+      // (Server now ignores any "Paid" status sent from the browser.) ----
+      void saveToEbookSheet({
+        ...data,
+        orderId: attempt.attemptId,
+        paymentStatus: "Pending",
+        product: "ebook",
+        productName: EBOOK_CONFIG.EBOOK_NAME,
+        amount: EBOOK_CONFIG.EBOOK_PRICE,
+        fbp, fbc, userAgent
+      }).catch(err => {
+        console.error("Ebook Apps Script pre-payment save failed (continuing to checkout anyway):", err);
+      });
+
+      openRazorpayCheckout(data, attempt, { fbp, fbc });
+
+      if (isRetryOfOpenedOrder) {
+        gasCall({ action: "status", rzpOrderId: attempt.rzpOrderId }, 10000)
+          .then(res => {
+            if (res && res.status === "paid") {
+              completePurchase({ paymentId: res.paymentId, rzpOrderId: attempt.rzpOrderId }, data, "recovered");
+            }
+          })
+          .catch(() => { /* can't check — checkout is already open, nothing to do */ });
+      }
+    } catch (err) {
+      console.error("Checkout could not start:", err);
+      resetButton();
+      setStatus("Something went wrong starting the payment. Please try again.", "#C0392B");
+    } finally {
+      submitting = false;
+    }
+  });
+
+  /* ============ 2. RAZORPAY CHECKOUT ============ */
+  let rzp = null;
+  let checkoutOpen = false;
+  let completed = false;
+
+  let failedThisOpen = false;
+
+  // Loads Razorpay's checkout.js again if the <script> tag in the page failed
+  // (weak network / blocked). Resolves true/false, never hangs (8 s cap).
+  let rzpScriptPromise = null;
+  function loadRazorpayScript() {
+    if (typeof Razorpay === "function") return Promise.resolve(true);
+    if (rzpScriptPromise) return rzpScriptPromise;
+    rzpScriptPromise = new Promise(resolve => {
+      const t = setTimeout(() => resolve(typeof Razorpay === "function"), 8000);
+      const sc = document.createElement("script");
+      sc.src = "https://checkout.razorpay.com/v1/checkout.js";
+      sc.async = true;
+      sc.onload = () => { clearTimeout(t); resolve(typeof Razorpay === "function"); };
+      sc.onerror = () => { clearTimeout(t); resolve(false); };
+      document.head.appendChild(sc);
+    }).then(ok => { if (!ok) rzpScriptPromise = null; return ok; });
+    return rzpScriptPromise;
+  }
+
+  function openRazorpayCheckout(data, attempt, meta) {
+    const { fbp, fbc } = meta;
+    lastCheckout = { data, attempt, meta };
+
+    // FIXED: if checkout.js failed to load (weak network / blocked), `new
+    // Razorpay` threw and the button stayed on "Preparing payment..." forever.
+    // Now: try loading it once more; if that fails too, show the recovery
+    // popup (Retry / manual UPI) instead of a dead end.
+    if (typeof Razorpay !== "function") {
+      submitBtn.textContent = "Loading payment window...";
+      loadRazorpayScript().then(ok => {
+        if (ok) { openRazorpayCheckout(data, attempt, meta); return; }
+        resetButton();
+        setStatus("The payment window couldn't load. Please check your internet connection and try again — or tap “Payment failed? — Pay here” to pay by UPI.", "#C0392B");
+      });
+      return;
+    }
+    failedThisOpen = false;
+    const phoneDigits = String(data.whatsapp || "").replace(/\D/g, "").slice(-10);
+
+    const options = {
+      key: SITE_CONFIG.RAZORPAY_KEY_ID, // public key only
+      amount: EBOOK_CONFIG.EBOOK_PRICE * 100, // paise — must equal the server-side order amount
+      currency: "INR",
+      name: SITE_CONFIG.BUSINESS_NAME,
+      description: EBOOK_CONFIG.EBOOK_NAME + " — eBook",
+      image: SITE_CONFIG.BUSINESS_LOGO,
+      prefill: {
+        name: String(data.fullName || "").trim(),
+        email: String(data.email || "").trim(),
+        // normalised so Razorpay never rejects a "+91 98765 43210"-style entry
+        contact: phoneDigits.length === 10 ? "+91" + phoneDigits : String(data.whatsapp || "")
+      },
+      notes: {
+        product: "ebook",
+        product_name: EBOOK_CONFIG.EBOOK_NAME,
+        order_id: attempt.attemptId,
+        // lets the server create/complete the sheet row from the payment alone
+        customer_name: String(data.fullName || "").slice(0, 100),
+        // Razorpay notes values are limited to 256 characters
+        fbp: String(fbp || "").slice(0, 250),
+        fbc: String(fbc || "").slice(0, 250)
+        // ebook_link REMOVED: the link now lives only on the server.
+      },
+      theme: { color: "#FF7A00" },
+
+      handler: function (response) {
+        submitBtn.textContent = "Confirming payment...";
+        completePurchase({
+          paymentId: response.razorpay_payment_id,
+          rzpOrderId: response.razorpay_order_id || attempt.rzpOrderId || ""
+        }, data, "handler");
+      },
+      modal: {
+        ondismiss: function () {
+          checkoutOpen = false;
+          if (completed) return;
+          resetButton();
+          if (failedThisOpen) {
+            setStatus("Payment failed. Tap the button to try again — or use “Payment failed? — Pay here” to pay by UPI.", "#C0392B");
+          } else {
+            // Closing Razorpay is NOT treated as a failed payment.
+            setStatus("Payment was not completed. You can try again anytime.");
+          }
+          // A UPI payment can still complete a little AFTER the popup is
+          // closed (customer approved in the app, came back, closed the
+          // "processing" screen). Keep checking quietly for a while.
+          if (attempt.rzpOrderId) startStatusPoll(attempt, 5000, 120000);
+        }
+      }
+    };
+    if (attempt.rzpOrderId) options.order_id = attempt.rzpOrderId;
+
+    try {
+      stopStatusPoll();
+      rzp = new Razorpay(options);
+      rzp.on("payment.failed", function (resp) {
+        // Genuine failed attempt reported by Razorpay. Razorpay keeps its own
+        // window open so the customer can retry another method inside it (same
+        // order — no duplicate orders/rows). No popup is opened automatically;
+        // the floating "Payment failed? — Pay here" button is always available.
+        if (completed) return;
+        failedThisOpen = true;
+        const err = (resp && resp.error) || {};
+        console.warn("Razorpay payment failed:", err.code, err.reason, err.description);
+        resetButton();
+        setStatus("Payment failed. Tap the button to try again — or use “Payment failed? — Pay here” to pay by UPI.", "#C0392B");
+      });
+      rzp.open();
+      loadingScreen(false); // Razorpay is open — stop the button countdown immediately
+      checkoutOpen = true;
+      attempt.opened = true;
+      saveAttempt(attempt);
+    } catch (err) {
+      console.error("Razorpay checkout failed to open:", err);
+      checkoutOpen = false;
+      resetButton();
+      setStatus("The payment window couldn't open. Please try again — or tap “Payment failed? — Pay here” to pay by UPI.", "#C0392B");
+    }
+  }
+
+  /* Single exit point to the Thank You page — whichever of (Razorpay handler,
+     visibility poll, post-dismiss poll, page-load recovery) gets there first.
+     Never waits on Apps Script. */
+  function completePurchase(info, data, via) {
+    if (completed || !info || !info.paymentId) return;
+    completed = true;
+    loadingScreen(false);
+    stopStatusPoll();
+    hideRecovery(false);
+
+    if (via !== "handler") {
+      setStatus("We found your completed payment — taking you to your eBook…", "#1F7A4D");
+      try { if (rzp && checkoutOpen) rzp.close(); } catch (e) { /* ignore */ }
+    }
+
+    const attempt = currentAttempt || {};
+    const customer = attempt.customer || data || {};
+    const payload = {
+      fullName: customer.fullName || "",
+      email: customer.email || "",
+      whatsapp: customer.whatsapp || "",
+      orderId: attempt.attemptId || "",
+      rzpOrderId: info.rzpOrderId || "",
+      paymentId: info.paymentId,
+      amount: EBOOK_CONFIG.EBOOK_PRICE,
+      productName: EBOOK_CONFIG.EBOOK_NAME,
+      via: via
+    };
+    storeSet("sessionStorage", SUCCESS_KEY, JSON.stringify(payload));
+    storeSet("localStorage", SUCCESS_KEY, JSON.stringify(payload));
+    storeRemove("localStorage", ATTEMPT_KEY); // order is paid — never reuse it
+
+    // Early server-side verification kick (fire-and-forget, keepalive so it
+    // survives navigation). The Thank You page verifies again and the webhook
+    // is a third independent path — none of them block this redirect.
+    if (isGasConfigured()) {
+      try {
+        fetch(gasUrl({ action: "verify", paymentId: info.paymentId }), { method: "GET", keepalive: true }).catch(() => {});
+      } catch (e) { /* ignore */ }
+    }
+
+    const qs = "pid=" + encodeURIComponent(info.paymentId) +
+      (attempt.attemptId ? "&oid=" + encodeURIComponent(attempt.attemptId) : "");
+    window.location.replace("ebook-success.html?" + qs);
+  }
+
+  /* ============ 2b. PAYMENT RECOVERY — FLOATING BUTTON + POPUP ============
+     The popup opens ONLY when the customer taps the floating
+     "Payment failed? — Pay here" button. Offers: Retry (same order, no
+     reload) · Scan QR · Copy UPI ID · WhatsApp screenshot · Call.
+     Manual UPI payments are verified by a person, so nothing here marks an
+     order paid, sends access, or fires the Purchase pixel.
+     All details come from PAYMENT_RECOVERY in js/config.js. */
+  const PR = (typeof PAYMENT_RECOVERY === "object" && PAYMENT_RECOVERY) || {};
+  const recoveryEl = document.getElementById("payRecovery");
+  const helpFloat = document.getElementById("payHelpFloat");
+  const WA_NUMBER = String(PR.WHATSAPP_NUMBER || SITE_CONFIG.WHATSAPP_NUMBER || "").replace(/\D/g, "");
+  let lastFocus = null;
+
+  function waLink(text) {
+    return "https://wa.me/" + WA_NUMBER + "?text=" + encodeURIComponent(text);
+  }
+
+  // Customer details for the WhatsApp message: last checkout, else whatever
+  // is currently typed in the form, else nothing (message still works).
+  function customerDetails() {
+    const d = (lastCheckout && lastCheckout.data) || {};
+    const val = id => { const el = document.getElementById(id); return el ? String(el.value || "").trim() : ""; };
+    return {
+      fullName: d.fullName || val("fullName"),
+      email: d.email || val("email"),
+      whatsapp: d.whatsapp || val("whatsapp"),
+      ref: ((lastCheckout && lastCheckout.attempt) || currentAttempt || {}).attemptId || ""
+    };
+  }
+
+  function screenshotMessage() {
+    const c = customerDetails();
+    const lines = [
+      `Hi, I have completed the payment for "${EBOOK_CONFIG.EBOOK_NAME}" (₹${EBOOK_CONFIG.EBOOK_PRICE}). I am sending my payment screenshot. Please verify my payment and provide my eBook access.`
+    ];
+    const extra = [];
+    if (c.fullName) extra.push("Name: " + c.fullName);
+    if (c.email) extra.push("Email: " + c.email);
+    if (c.whatsapp) extra.push("WhatsApp: " + c.whatsapp);
+    if (c.ref) extra.push("Order ref: " + c.ref);
+    if (extra.length) lines.push("", ...extra);
+    return lines.join("\n");
+  }
+
+  const PAY_DIGITS = String(PR.PAY_PHONE_NUMBER || "").replace(/\D/g, "").slice(-10);
+
+  function setupRecoveryStatic() {
+    const upiId = String(PR.UPI_ID || "").trim();
+    const qr = String(PR.QR_IMAGE || "").trim();
+    const upiEl = document.getElementById("payUpiId");
+    const qrEl = document.getElementById("payQrImg");
+    if (upiEl) upiEl.textContent = upiId;
+    // Option 3 — pay to phone number (hidden until PAY_PHONE_NUMBER is set)
+    const phoneBlock = document.getElementById("payPhoneBlock");
+    if (phoneBlock) {
+      if (PAY_DIGITS.length === 10) {
+        document.getElementById("payPhoneNumber").textContent = "+91 " + PAY_DIGITS.slice(0, 5) + " " + PAY_DIGITS.slice(5);
+        const nm = document.getElementById("payPhoneName");
+        if (PR.PAY_PHONE_NAME) nm.textContent = PR.PAY_PHONE_NAME; else nm.parentElement.style.display = "none";
+      } else {
+        phoneBlock.style.display = "none";
+      }
+    }
+    if (qrEl) {
+      // If the image file is missing, hide it rather than show a broken icon.
+      qrEl.addEventListener("error", () => { qrEl.style.display = "none"; });
+      if (qr) {
+        qrEl.src = qr;
+        qrEl.alt = "UPI QR code to pay " + (SITE_CONFIG.BUSINESS_NAME || "") + (upiId ? " (" + upiId + ")" : "");
+      } else {
+        qrEl.style.display = "none";
+      }
+    }
+    const num = document.getElementById("paySupportNumber");
+    if (num) num.textContent = PR.SUPPORT_PHONE_DISPLAY || ("+" + WA_NUMBER);
+    const call = document.getElementById("payCallLink");
+    if (call) call.href = "tel:" + String(PR.SUPPORT_PHONE_TEL || ("+" + WA_NUMBER)).replace(/[^\d+]/g, "");
+    const sup = document.getElementById("paySupportWhatsapp");
+    if (sup) sup.href = waLink(`Hi, I'm having trouble paying for "${EBOOK_CONFIG.EBOOK_NAME}". Can you help?`);
+  }
+
+  function showRecovery() {
+    if (!recoveryEl || completed) return;
+    // Refresh both WhatsApp links with the latest customer details.
+    const msg = waLink(screenshotMessage());
+    ["payWhatsappBtn", "payAlreadyPaidWa"].forEach(id => { const a = document.getElementById(id); if (a) a.href = msg; });
+    ["payCopied", "payCopiedPhone"].forEach(id => { const c = document.getElementById(id); if (c) c.textContent = ""; });
+
+    lastFocus = document.activeElement;
+    recoveryEl.classList.add("open");
+    recoveryEl.setAttribute("aria-hidden", "false");
+    document.body.style.overflow = "hidden";
+    const box = recoveryEl.querySelector(".pay-recovery");
+    if (box) box.scrollTop = 0;
+    const closeBtn = document.getElementById("payRecoveryClose");
+    if (closeBtn) setTimeout(() => { try { closeBtn.focus({ preventScroll: true }); } catch (e) { closeBtn.focus(); } }, 50);
+  }
+
+  function hideRecovery(restoreFocus) {
+    if (!recoveryEl || !recoveryEl.classList.contains("open")) return;
+    recoveryEl.classList.remove("open");
+    recoveryEl.setAttribute("aria-hidden", "true");
+    document.body.style.overflow = "";
+    if (restoreFocus !== false && lastFocus && lastFocus.focus) { try { lastFocus.focus({ preventScroll: true }); } catch (e) {} }
+  }
+
+  function retryPayment() {
+    hideRecovery(false);
+    if (submitting || checkoutOpen || completed) return;
+    const data = Object.fromEntries(new FormData(form).entries());
+    if (!validateForm(data)) {
+      // Details missing (e.g. a fresh visit) — take them to the form first.
+      setStatus("Please enter your details to retry the payment.", "#C0392B");
+      const target = document.getElementById("buy") || form;
+      try { target.scrollIntoView({ behavior: "smooth", block: "start" }); } catch (e) { target.scrollIntoView(); }
+      return;
+    }
+    // Same path as the "Get the eBook" button: same attempt + same Razorpay
+    // order, one checkout instance — no page reload, no new order.
+    if (typeof form.requestSubmit === "function") form.requestSubmit();
+    else form.dispatchEvent(new Event("submit", { cancelable: true }));
+  }
+
+  function legacyCopy(text) {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.setAttribute("readonly", "");
+    ta.style.cssText = "position:fixed;top:0;left:0;width:1px;height:1px;opacity:0;";
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    try { ta.setSelectionRange(0, text.length); } catch (e) {}
+    let ok = false;
+    try { ok = document.execCommand("copy"); } catch (e) { ok = false; }
+    document.body.removeChild(ta);
+    return ok;
+  }
+
+  const copyTimers = {};
+  function copyText(text, outId, textElId, okMsg) {
+    const out = document.getElementById(outId);
+    const done = ok => {
+      if (!out) return;
+      if (ok) {
+        out.style.color = "#1F7A4D";
+        out.textContent = okMsg;
+      } else {
+        // Last resort: select the text so a long-press "Copy" works.
+        out.style.color = "var(--ink-soft)";
+        out.textContent = "Couldn't copy automatically — press and hold the text above to copy it.";
+        const el = document.getElementById(textElId);
+        try { const r = document.createRange(); r.selectNodeContents(el); const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r); } catch (e) {}
+      }
+      clearTimeout(copyTimers[outId]);
+      copyTimers[outId] = setTimeout(() => { if (out) out.textContent = ""; }, 3500);
+    };
+    if (!text) return done(false);
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(text).then(() => done(true), () => done(legacyCopy(text)));
+    } else {
+      done(legacyCopy(text));
+    }
+  }
+  function copyUpiId() { copyText(String(PR.UPI_ID || "").trim(), "payCopied", "payUpiId", "✓ UPI ID copied!"); }
+  function copyPayPhone() { copyText(PAY_DIGITS, "payCopiedPhone", "payPhoneNumber", "✓ Phone number copied!"); }
+
+  /* ---- Floating button placement ----
+     Sits 12 px above the WhatsApp float, measured from its real size (its
+     label wraps differently on different screens), and fades away only while
+     it would sit on top of the checkout button so it never blocks paying. */
+  const waFloat = document.getElementById("supportFloat");
+  function placeHelpFloat() {
+    if (!helpFloat) return;
+    if (waFloat) {
+      const r = waFloat.getBoundingClientRect();
+      if (r.height > 0) {
+        helpFloat.style.bottom = Math.round(window.innerHeight - r.top + 12) + "px";
+        helpFloat.style.right = Math.round(window.innerWidth - r.right) + "px";
+      }
+    }
+    const f = helpFloat.getBoundingClientRect();
+    const b = submitBtn.getBoundingClientRect();
+    const overlaps = !(f.right < b.left || f.left > b.right || f.bottom < b.top || f.top > b.bottom);
+    helpFloat.classList.toggle("is-tucked", overlaps && b.height > 0);
+  }
+  let placeQueued = false;
+  function queuePlace() {
+    if (placeQueued) return;
+    placeQueued = true;
+    requestAnimationFrame(() => { placeQueued = false; placeHelpFloat(); });
+  }
+
+  if (recoveryEl) {
+    setupRecoveryStatic();
+    document.getElementById("payRecoveryClose").addEventListener("click", () => hideRecovery());
+    document.getElementById("payRetryBtn").addEventListener("click", retryPayment);
+    document.getElementById("payCopyBtn").addEventListener("click", copyUpiId);
+    const phoneCopyBtn = document.getElementById("payCopyPhoneBtn");
+    if (phoneCopyBtn) phoneCopyBtn.addEventListener("click", copyPayPhone);
+    recoveryEl.addEventListener("click", (e) => { if (e.target === recoveryEl) hideRecovery(); });
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && recoveryEl.classList.contains("open")) hideRecovery();
+    });
+  }
+  if (helpFloat && recoveryEl) {
+    helpFloat.addEventListener("click", showRecovery);
+    window.addEventListener("scroll", queuePlace, { passive: true });
+    window.addEventListener("resize", queuePlace);
+    window.addEventListener("load", queuePlace);
+    placeHelpFloat();
+  } else if (helpFloat) {
+    helpFloat.style.display = "none"; // popup markup missing — don't show a dead button
+  }
+
+  /* ============ 3. PAYMENT RECOVERY ============ */
+  let pollTimer = null;
+  let pollToken = 0;
+
+  function stopStatusPoll() {
+    pollToken++;
+    if (pollTimer) { clearTimeout(pollTimer); pollTimer = null; }
+  }
+
+  // Asks the server (which asks Razorpay's API) whether this order has a
+  // successful payment. Only one poll loop runs at a time.
+  function startStatusPoll(attempt, intervalMs, maxMs) {
+    if (!attempt || !attempt.rzpOrderId || completed || !isGasConfigured()) return;
+    stopStatusPoll();
+    const token = pollToken;
+    const startedAt = Date.now();
+
+    const tick = () => {
+      if (token !== pollToken || completed) return;
+      gasCall({ action: "status", rzpOrderId: attempt.rzpOrderId }, 12000)
+        .then(res => {
+          if (token !== pollToken || completed) return;
+          if (res && res.status === "paid") {
+            completePurchase({ paymentId: res.paymentId, rzpOrderId: attempt.rzpOrderId }, attempt.customer, "recovered");
+          }
+        })
+        .catch(() => { /* transient — keep polling */ })
+        .finally(() => {
+          if (token !== pollToken || completed) return;
+          if (Date.now() - startedAt < maxMs) pollTimer = setTimeout(tick, intervalMs);
+        });
+    };
+    tick();
+  }
+
+  // Registered ONCE (not per checkout) — no duplicate listeners. When the
+  // customer comes back from the UPI/wallet app while checkout is open, start
+  // checking in parallel with Razorpay's own "processing" screen.
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible" && checkoutOpen && !completed && currentAttempt && currentAttempt.rzpOrderId) {
+      startStatusPoll(currentAttempt, 4000, 180000);
+    }
+  });
+
+  // Page-load recovery: the page was reloaded/killed after checkout opened
+  // (common when a phone switches to a UPI app). If that order was paid,
+  // take the customer straight to their eBook.
+  if (currentAttempt && currentAttempt.opened && currentAttempt.rzpOrderId) {
+    startStatusPoll(currentAttempt, 5000, 20000);
+  }
+
+  /* ============ 4. APPS SCRIPT CALLS ============ */
+  function isGasConfigured() {
+    const url = EBOOK_CONFIG.EBOOK_GOOGLE_SCRIPT_URL;
+    return !!url && !url.startsWith("NEEDS_CONFIGURATION");
+  }
+  function gasUrl(params) {
+    return `${EBOOK_CONFIG.EBOOK_GOOGLE_SCRIPT_URL}?${new URLSearchParams(params).toString()}`;
+  }
+
+  // JSON call with a hard timeout — no request can hang the flow.
+  function gasCall(params, timeoutMs) {
+    if (!isGasConfigured()) return Promise.reject(new Error("Ebook Apps Script URL not configured"));
+    const controller = typeof AbortController === "function" ? new AbortController() : null;
+    const timer = setTimeout(() => { if (controller) controller.abort(); }, timeoutMs);
+    return fetch(gasUrl(params), { method: "GET", cache: "no-store", signal: controller ? controller.signal : undefined })
+      .then(r => r.json())
+      .finally(() => clearTimeout(timer));
+  }
+
+  // Pre-payment "Pending" lead save (fire-and-forget).
+  function saveToEbookSheet(payload) {
+    if (!isGasConfigured()) {
+      console.warn("Ebook Google Apps Script URL not configured — skipping sheet save.");
+      return Promise.resolve();
+    }
+    return fetch(gasUrl(payload), { method: "GET", keepalive: true });
+  }
+
+  /* ============ 5. META PIXEL — LEAD + INITIATE CHECKOUT ============ */
+  function firePixelLead() {
+    if (typeof fbq !== "function") return;
+    const eventId = "ebook_lead_" + storeGet("sessionStorage", "tfr_ebook_session_id");
+    fbq("track", "Lead", { content_name: EBOOK_CONFIG.EBOOK_NAME }, { eventID: eventId });
+  }
+  function firePixelInitiateCheckout() {
+    if (typeof fbq !== "function") return;
+    const eventId = "ebook_checkout_" + storeGet("sessionStorage", "tfr_ebook_session_id");
+    fbq("track", "InitiateCheckout", {
+      value: EBOOK_CONFIG.EBOOK_PRICE,
+      currency: "INR",
+      content_name: EBOOK_CONFIG.EBOOK_NAME
+    }, { eventID: eventId });
+  }
+});
