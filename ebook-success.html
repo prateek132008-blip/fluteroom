@@ -10,7 +10,7 @@
 
 <!-- ============ META PIXEL BASE CODE ============
      Reuses the SAME Pixel ID as every other page. Only base pixel + PageView
-     here on load. Purchase fires below, once, from the dedup-guarded script. -->
+     here on load. Purchase fires below, once, after server verification. -->
 <script>
 !function(f,b,e,v,n,t,s)
 {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
@@ -60,7 +60,12 @@ fbq('track', 'PageView');
     padding: 12px 22px; font-weight: 700; font-size: 14px; cursor: pointer; margin-top: 10px;
   }
   .detail-list { text-align: left; font-size: 14px; color: var(--ink-soft); margin-top: 20px; }
-  .detail-list div { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--line); }
+  .detail-list div { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+  .detail-list strong { word-break: break-all; text-align: right; }
+  /* ---- New: verification status line + pending state of the download button ---- */
+  .verify-status { font-size: 13.5px; color: var(--ink-soft); margin-top: 12px; min-height: 20px; }
+  #downloadEbookBtn[aria-disabled="true"] { opacity: 0.6; pointer-events: none; }
+  .btn-check-again { background: none; border: none; color: var(--orange-deep); text-decoration: underline; font-weight: 700; font-size: 13.5px; cursor: pointer; margin-top: 6px; display: none; }
 </style>
 </head>
 <body>
@@ -71,12 +76,14 @@ fbq('track', 'PageView');
       <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
     </div>
     <img class="ebook-mini-cover" id="ebookMiniCover" src="assets/alankaars-ebook-cover.png" alt="30 Alankaras for Flute eBook cover">
-    <h1 style="font-size:26px;">Payment Successful 🎉</h1>
-    <p style="color:var(--ink-soft); margin-top:8px;">Your <strong>30 Alankaras for Flute</strong> eBook is ready.</p>
+    <h1 style="font-size:26px;" id="successTitle">Payment Successful 🎉</h1>
+    <p style="color:var(--ink-soft); margin-top:8px;" id="successSubtitle">Your <strong>30 Alankaras for Flute</strong> eBook is ready.</p>
 
     <div class="lifetime-pill">🔒 Lifetime Access</div>
 
-    <a href="#" id="downloadEbookBtn" target="_blank" rel="noopener" class="btn btn-primary btn-block">Download / Access Your eBook</a>
+    <a href="#" id="downloadEbookBtn" target="_blank" rel="noopener" class="btn btn-primary btn-block" aria-disabled="true">Preparing your download link…</a>
+    <p class="verify-status" id="verifyStatus">Confirming your payment with Razorpay…</p>
+    <button type="button" class="btn-check-again" id="checkAgainBtn">Check again</button>
 
     <div class="support-warning">
       <strong>Haven't received the eBook on your email, or having trouble downloading it using the link above?</strong>
@@ -96,68 +103,109 @@ fbq('track', 'PageView');
 </div>
 
 <script>
+/* ==========================================================================
+   Thank You page — CHANGES IN THIS VERSION
+   - The payment ID now arrives in the URL (?pid=pay_...&oid=EBK-...), so a
+     REFRESH keeps working (previously the stored payload was deleted on first
+     load and a refresh bounced the customer back to the sales page).
+   - The download link is NOT in the website code any more. The page shows
+     the confirmation immediately, then asks the Apps Script to verify the
+     payment with Razorpay's API; only a verified payment receives the link.
+     Retries with back-off for ~2 minutes; if Apps Script is unreachable the
+     customer is told the link is also being emailed (the webhook path is
+     independent of this page) and can WhatsApp support with the Payment ID.
+   - All customer values are rendered with textContent (no innerHTML).
+   - Storage access is wrapped in try/catch (can throw in in-app browsers).
+   ========================================================================== */
 document.addEventListener("DOMContentLoaded", () => {
-  const successStorageKey = "tfr_ebook_success_payload";
-  const raw = sessionStorage.getItem(successStorageKey) || localStorage.getItem(successStorageKey);
-  if (!raw) {
-    // No payload (e.g. user navigated here directly) — send them back rather than showing an empty state.
+  const SUCCESS_KEY = "tfr_ebook_success_payload";
+  function storeGet(area, key) { try { return window[area].getItem(key); } catch (e) { return null; } }
+  function storeSet(area, key, v) { try { window[area].setItem(key, v); } catch (e) {} }
+  function storeRemove(area, key) { try { window[area].removeItem(key); } catch (e) {} }
+
+  let stored = {};
+  try { stored = JSON.parse(storeGet("sessionStorage", SUCCESS_KEY) || storeGet("localStorage", SUCCESS_KEY) || "{}") || {}; } catch (e) { stored = {}; }
+
+  const params = new URLSearchParams(window.location.search);
+  let paymentId = params.get("pid") || stored.paymentId || "";
+  const orderId = params.get("oid") || stored.orderId || "";
+
+  if (!/^pay_[A-Za-z0-9]{6,40}$/.test(paymentId)) {
+    // No payment reference (e.g. navigated here directly) — back to the sales page.
     window.location.replace("alankaars-ebook.html");
     return;
   }
-  const data = JSON.parse(raw);
-
-  // ---- The SAME configured Drive link (EBOOK_CONFIG.EBOOK_DRIVE_LINK) that goes
-  // into the confirmation email is used here too, so there's only one place to update it.
-  // Prefer the value captured on the eBook page at purchase time (data.ebookLink);
-  // fall back to the live config in case it was updated since.
-  const driveLink = (data.ebookLink && !data.ebookLink.startsWith("NEEDS_CONFIGURATION"))
-    ? data.ebookLink
-    : EBOOK_CONFIG.EBOOK_DRIVE_LINK;
-
-  const downloadBtn = document.getElementById("downloadEbookBtn");
-  if (driveLink && !driveLink.startsWith("NEEDS_CONFIGURATION")) {
-    downloadBtn.href = driveLink;
-  } else {
-    downloadBtn.href = "#";
-    downloadBtn.textContent = "Access link coming shortly — contact WhatsApp support";
+  // Make sure the payment ID is in the URL so a refresh re-verifies correctly.
+  if (!params.get("pid")) {
+    try {
+      history.replaceState(null, "", "ebook-success.html?pid=" + encodeURIComponent(paymentId) + (orderId ? "&oid=" + encodeURIComponent(orderId) : ""));
+    } catch (e) {}
   }
 
-  document.getElementById("detailList").innerHTML = `
-    <div><span>Product</span><strong>30 Alankaras for Flute</strong></div>
-    <div><span>Name</span><strong>${data.fullName}</strong></div>
-    <div><span>Email</span><strong>${data.email}</strong></div>
-    <div><span>Amount</span><strong>₹${data.amount}</strong></div>
-    <div><span>Order ID</span><strong>${data.orderId}</strong></div>
-    <div><span>Payment ID</span><strong>${data.paymentId}</strong></div>
-  `;
+  const data = {
+    fullName: stored.fullName || "",
+    email: stored.email || "",
+    whatsapp: stored.whatsapp || "",
+    amount: stored.amount || EBOOK_CONFIG.EBOOK_PRICE,
+    productName: stored.productName || EBOOK_CONFIG.EBOOK_NAME,
+    orderId: orderId,
+    paymentId: paymentId
+  };
+
+  const titleEl = document.getElementById("successTitle");
+  const subtitleEl = document.getElementById("successSubtitle");
+  const downloadBtn = document.getElementById("downloadEbookBtn");
+  const statusEl = document.getElementById("verifyStatus");
+  const checkAgainBtn = document.getElementById("checkAgainBtn");
+
+  function renderDetails() {
+    const list = document.getElementById("detailList");
+    list.textContent = "";
+    [
+      ["Product", data.productName],
+      ["Name", data.fullName],
+      ["Email", data.email],
+      ["Amount", "₹" + data.amount],
+      ["Order ID", data.orderId],
+      ["Payment ID", data.paymentId]
+    ].forEach(([label, value]) => {
+      if (!value) return;
+      const row = document.createElement("div");
+      const l = document.createElement("span"); l.textContent = label;
+      const v = document.createElement("strong"); v.textContent = value;
+      row.appendChild(l); row.appendChild(v);
+      list.appendChild(row);
+    });
+  }
+  renderDetails();
 
   document.getElementById("ebookSupportWhatsapp").addEventListener("click", () => {
     const msg = encodeURIComponent(`Hi, I haven't received my "30 Alankaras for Flute" eBook. Order ID: ${data.orderId}, Payment ID: ${data.paymentId}, Email: ${data.email}`);
     window.open(`https://wa.me/${SITE_CONFIG.WHATSAPP_NUMBER}?text=${msg}`, "_blank");
   });
 
-  /* ============ META PIXEL — PURCHASE (fires exactly once per payment) ============
-     Same dedup strategy as the existing enrollment success.html:
-     1. eventID is derived from the Razorpay payment ID, so Meta's own
-        deduplication (event_id) collapses any duplicate sends of the SAME payment.
-     2. A localStorage flag keyed to that payment ID also blocks a second
-        client-side fire if this page is refreshed.
-     Together this guarantees ONE Purchase event per transaction. Uses a
-     DIFFERENT localStorage key prefix (tfr_ebook_purchase_fired_) from the
-     enrollment flow's tfr_purchase_fired_, so the two can never collide. */
-  const firedKey = "tfr_ebook_purchase_fired_" + data.paymentId;
-  if (!localStorage.getItem(firedKey) && typeof fbq === "function") {
-    // ---- Advanced Matching (new): attach the customer's plain-text info so
-    // fbevents.js hashes + includes it with this Purchase event, raising EMQ.
-    // Nothing raw/hashed is sent to Meta by our own code — the Pixel does it.
+  downloadBtn.addEventListener("click", (e) => {
+    if (downloadBtn.getAttribute("aria-disabled") === "true") e.preventDefault();
+  });
+
+  function gasCall(q, timeoutMs) {
+    const url = EBOOK_CONFIG.EBOOK_GOOGLE_SCRIPT_URL;
+    if (!url || url.startsWith("NEEDS_CONFIGURATION")) return Promise.reject(new Error("not configured"));
+    const controller = typeof AbortController === "function" ? new AbortController() : null;
+    const timer = setTimeout(() => { if (controller) controller.abort(); }, timeoutMs);
+    return fetch(url + "?" + new URLSearchParams(q).toString(), { method: "GET", cache: "no-store", signal: controller ? controller.signal : undefined })
+      .then(r => r.json())
+      .finally(() => clearTimeout(timer));
+  }
+
+  /* ============ META PIXEL — PURCHASE (fires exactly once per verified payment) ============
+     eventID is derived from the Razorpay payment ID (matches the server CAPI
+     event, so Meta de-duplicates), and a localStorage flag blocks a second
+     client-side fire on refresh. Now fires only after server verification. */
+  function firePurchasePixel(amount) {
+    const firedKey = "tfr_ebook_purchase_fired_" + data.paymentId;
+    if (storeGet("localStorage", firedKey) || typeof fbq !== "function") return;
     const nameParts = (data.fullName || "").trim().split(/\s+/);
-    // NEW: ph is normalized to match Ebook_Code.gs's normalizePhone() (adds
-    // the India country code for a bare 10-digit number) so the browser
-    // Purchase event's phone hash matches the server CAPI Purchase event's
-    // phone hash for the same customer — previously these could hash
-    // differently. NEW: external_id (raw — the Pixel hashes it, same as
-    // em/ph/fn/ln) adds an extra match signal sourced from the
-    // already-collected email.
     const rawWhatsapp = (data.whatsapp || "").replace(/\D/g, "");
     const normalizedPhone = rawWhatsapp.length === 10 ? "91" + rawWhatsapp : rawWhatsapp;
     fbq("set", "userData", {
@@ -168,18 +216,86 @@ document.addEventListener("DOMContentLoaded", () => {
       external_id: (data.email || "").trim().toLowerCase()
     });
     fbq("track", "Purchase", {
-      value: data.amount,
+      value: amount,
       currency: "INR",
       content_name: data.productName || "30 Alankaras for Flute",
       content_type: "product"
     }, { eventID: "ebook_purchase_" + data.paymentId });
-    localStorage.setItem(firedKey, "1");
+    storeSet("localStorage", firedKey, "1");
   }
 
-  // Clear the one-time payload so a manual back/forward navigation doesn't
-  // let a stale success screen re-display old data indefinitely.
-  sessionStorage.removeItem(successStorageKey);
-  localStorage.removeItem(successStorageKey);
+  function onVerified(res) {
+    if (res.fullName && !data.fullName) data.fullName = res.fullName;
+    if (res.email && !data.email) data.email = res.email;
+    if (res.attemptId && !data.orderId) data.orderId = res.attemptId;
+    if (res.amount) data.amount = res.amount;
+    renderDetails();
+
+    if (res.ebookLink && /^https:\/\//.test(res.ebookLink)) {
+      downloadBtn.href = res.ebookLink;
+      downloadBtn.textContent = "Download / Access Your eBook";
+      downloadBtn.setAttribute("aria-disabled", "false");
+      statusEl.textContent = "Payment verified ✓ The download link has also been emailed to you" + (data.email ? " at " + data.email : "") + ".";
+    } else {
+      downloadBtn.href = "#";
+      downloadBtn.textContent = "Access link coming shortly — contact WhatsApp support";
+      statusEl.textContent = "Payment verified ✓";
+    }
+    checkAgainBtn.style.display = "none";
+    firePurchasePixel(data.amount);
+
+    // Payment is verified and the URL carries the payment ID, so the stored
+    // payload is no longer needed (refresh re-verifies from the URL).
+    storeRemove("sessionStorage", SUCCESS_KEY);
+    storeRemove("localStorage", SUCCESS_KEY);
+  }
+
+  function onDefinitiveFailure(status) {
+    titleEl.textContent = "Payment not confirmed";
+    subtitleEl.textContent = "Razorpay has not confirmed this payment.";
+    downloadBtn.textContent = "Download unavailable";
+    statusEl.style.color = "#C0392B";
+    statusEl.textContent = "Status: " + status + ". If money was deducted from your account, message us on WhatsApp with the Payment ID below — we'll sort it out.";
+    checkAgainBtn.style.display = "none";
+  }
+
+  const DELAYS = [0, 2000, 3000, 5000, 8000, 12000, 15000, 20000, 30000, 30000]; // ≈ 2 min
+  let running = false;
+
+  function verifyLoop() {
+    if (running) return;
+    running = true;
+    checkAgainBtn.style.display = "none";
+    statusEl.style.color = "";
+    statusEl.textContent = "Confirming your payment with Razorpay…";
+    let i = 0;
+
+    const step = () => {
+      gasCall({ action: "verify", paymentId: data.paymentId }, 15000)
+        .then(res => {
+          const s = res && res.status;
+          if (s === "paid") { running = false; onVerified(res); return true; }
+          if (["failed", "refunded", "amount_mismatch", "not_ebook", "not_found"].includes(s)) {
+            running = false; onDefinitiveFailure(s); return true;
+          }
+          if (s === "pending") statusEl.textContent = "Your bank is still confirming the payment — this can take a minute…";
+          return false;
+        })
+        .catch(() => false)
+        .then(done => {
+          if (done) return;
+          i++;
+          if (i < DELAYS.length) { setTimeout(step, DELAYS[i]); return; }
+          running = false;
+          statusEl.textContent = "Your payment is recorded with Razorpay. We're still confirming it — your eBook link will be emailed to you as soon as it's confirmed. You can also tap “Check again” or contact us on WhatsApp.";
+          checkAgainBtn.style.display = "inline-block";
+        });
+    };
+    step();
+  }
+
+  checkAgainBtn.addEventListener("click", verifyLoop);
+  verifyLoop();
 });
 </script>
 </body>
