@@ -178,7 +178,16 @@ document.addEventListener("DOMContentLoaded", () => {
     const el = form.querySelector(`[data-error-for="${fieldName}"]`);
     if (el) el.textContent = message || "";
   }
+  // Visual-only "opening payment page" screen (js/checkout-loading.js).
+  // Guarded so it can never throw into, or delay, the payment flow.
+  function loadingScreen(on) {
+    try {
+      const o = window.TFRCheckoutLoading;
+      if (o) { if (on) o.show(); else o.hide(); }
+    } catch (e) { /* visual only */ }
+  }
   function resetButton() {
+    loadingScreen(false);
     submitBtn.disabled = false;
     submitBtn.textContent = "Get the eBook — ₹" + EBOOK_CONFIG.EBOOK_PRICE;
   }
@@ -329,6 +338,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
       submitBtn.disabled = true;
       submitBtn.textContent = "Preparing payment...";
+      loadingScreen(true);
       formStatus.textContent = "";
 
       const fbp = getCookie("_fbp");
@@ -506,6 +516,7 @@ document.addEventListener("DOMContentLoaded", () => {
         setStatus("Payment failed. Tap the button to try again — or use “Payment failed? — Pay here” to pay by UPI.", "#C0392B");
       });
       rzp.open();
+      loadingScreen(false); // Razorpay is open — remove the reassurance screen immediately
       checkoutOpen = true;
       attempt.opened = true;
       saveAttempt(attempt);
@@ -523,6 +534,7 @@ document.addEventListener("DOMContentLoaded", () => {
   function completePurchase(info, data, via) {
     if (completed || !info || !info.paymentId) return;
     completed = true;
+    loadingScreen(false);
     stopStatusPoll();
     hideRecovery(false);
 
