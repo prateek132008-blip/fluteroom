@@ -85,6 +85,19 @@ const EBOOK_CONFIG = {
   // server has verified the payment with Razorpay. Do NOT put it back here.
   EBOOK_DRIVE_LINK: "",
 
+  // ---- MANUAL UPI FALLBACK (shown ONLY in the "Payment Failed" recovery popup) ----
+  // Public payment details only (anyone paying you sees them anyway) — no
+  // secret keys belong here.
+  //   UPI ID  → change MANUAL_UPI_ID below.
+  //   QR code → replace the image file assets/upi-qr.png with your new QR
+  //             (keep the same file name, or change MANUAL_UPI_QR_IMAGE).
+  // Manual UPI payments do NOT go through Razorpay: you verify them from the
+  // customer's WhatsApp screenshot and send the eBook link yourself.
+  MANUAL_UPI_ID: "prateekjha@fam",
+  MANUAL_UPI_QR_IMAGE: "assets/upi-qr.png",
+  // Shown in the popup. The call + WhatsApp links use SITE_CONFIG.WHATSAPP_NUMBER.
+  SUPPORT_PHONE_DISPLAY: "+91 8709268496",
+
   // NEEDS CONFIGURATION — the separate Google Apps Script Web App URL for the
   // eBook (deployed from google-apps-script/Ebook_Code.gs — see its setup
   // instructions). Deliberately a different script/sheet from the main
