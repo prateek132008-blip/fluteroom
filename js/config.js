@@ -111,5 +111,10 @@ const PAYMENT_RECOVERY = {
   UPI_ID: "prateekjha@fam",
   WHATSAPP_NUMBER: "918709268496",        // country code + number, no + or spaces (used for wa.me links)
   SUPPORT_PHONE_DISPLAY: "+91 8709268496", // what customers see
-  SUPPORT_PHONE_TEL: "+918709268496"       // used for the tap-to-call link
+  SUPPORT_PHONE_TEL: "+918709268496",      // used for the tap-to-call link
+
+  // Option 3 — "Pay to Phone Number" (any UPI app → Pay to phone number).
+  // Enter the 10-digit number linked to the account below. Leave "" to hide Option 3.
+  PAY_PHONE_NUMBER: "7541940089",
+  PAY_PHONE_NAME: "NIDHI JHA"              // name customers will see in their UPI app
 };
