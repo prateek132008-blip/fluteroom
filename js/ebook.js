@@ -320,8 +320,12 @@ document.addEventListener("DOMContentLoaded", () => {
         // ---- Advanced Matching (unchanged) ----
         const { firstName, lastName } = splitName(data.fullName);
         if (typeof fbq === "function") {
-          fbq("set", "userData", {
-            em: data.email,
+          // fbq("init", id, userData) is the Pixel's documented way to add
+          // customer details (fbq("set","userData") did not update them).
+          // Re-running init does not send any event.
+          fbq("init", SITE_CONFIG.META_PIXEL_ID, {
+            em: (data.email || "").trim().toLowerCase(),
+            country: "in",
             ph: normalizePhoneForPixel(data.whatsapp),
             fn: firstName,
             ln: lastName,
