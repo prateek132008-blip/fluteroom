@@ -320,42 +320,6 @@ fbq('track', 'PageView');
     .pay-recovery { padding: 22px 16px 18px; }
     .pr-upi-id { font-size: 15px; }
   }
-  /* ---- "Opening payment page" reassurance screen (visual only) ----
-     Shown between "Get the eBook" and Razorpay opening; controlled by
-     js/checkout-loading.js. Sits above the page and floats, below Razorpay. */
-  .checkout-loading {
-    position: fixed; inset: 0; z-index: 1050;
-    display: flex; align-items: center; justify-content: center; padding: 20px;
-    background: rgba(255, 248, 242, 0.94);
-    -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px);
-    opacity: 0; visibility: hidden; pointer-events: none;
-    transition: opacity 0.2s var(--ease), visibility 0s linear 0.2s;
-  }
-  .checkout-loading.open { opacity: 1; visibility: visible; pointer-events: auto; transition: opacity 0.2s var(--ease); }
-  .checkout-loading-card {
-    width: 100%; max-width: 380px; text-align: center;
-    background: var(--white); border: 1.5px solid var(--line); border-radius: var(--radius-lg);
-    box-shadow: var(--shadow-soft); padding: 34px 26px 28px;
-  }
-  .checkout-loading-spinner {
-    width: 46px; height: 46px; margin: 0 auto 20px; border-radius: 50%;
-    border: 3px solid var(--orange-light); border-top-color: var(--orange);
-    animation: checkout-spin 0.9s linear infinite;
-  }
-  @keyframes checkout-spin { to { transform: rotate(360deg); } }
-  .checkout-loading-card h3 { font-size: 21px; margin-bottom: 8px; }
-  .checkout-loading-card p { font-size: 14.5px; color: var(--ink-soft); }
-  .checkout-loading-count {
-    display: inline-block; margin-top: 18px; padding: 7px 14px; border-radius: 100px;
-    background: var(--orange-wash); color: var(--orange-deep);
-    font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums;
-  }
-  .checkout-loading-secure { margin-top: 16px; font-size: 12px; color: var(--ink-soft); display: flex; align-items: center; justify-content: center; gap: 6px; }
-  .checkout-loading-secure svg { color: var(--orange); }
-  @media (max-width: 420px) {
-    .checkout-loading-card { padding: 30px 18px 24px; }
-    .checkout-loading-count { font-size: 12.5px; padding: 7px 12px; }
-  }
 </style>
 </head>
 <body>
@@ -769,21 +733,6 @@ fbq('track', 'PageView');
         <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.5 2 2 6.5 2 12c0 1.8.5 3.5 1.3 5L2 22l5.2-1.3c1.4.8 3.1 1.3 4.8 1.3 5.5 0 10-4.5 10-10S17.5 2 12 2z"/></svg>
         Send Screenshot on WhatsApp
       </a>
-    </div>
-  </div>
-</div>
-
-<!-- ============================= "OPENING PAYMENT PAGE" REASSURANCE SCREEN =============================
-     Visual only — shown/hidden by js/checkout-loading.js; never controls Razorpay. -->
-<div class="checkout-loading" id="checkoutLoading" role="status" aria-live="polite" aria-hidden="true">
-  <div class="checkout-loading-card">
-    <div class="checkout-loading-spinner" aria-hidden="true"></div>
-    <h3 id="checkoutLoadingTitle">Processing your request…</h3>
-    <p id="checkoutLoadingSub">Your secure payment page will open shortly.</p>
-    <div class="checkout-loading-count" id="checkoutLoadingCount">Opening payment page in 8 seconds…</div>
-    <div class="checkout-loading-secure">
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
-      Secured by Razorpay
     </div>
   </div>
 </div>
