@@ -185,8 +185,11 @@ document.addEventListener("DOMContentLoaded", () => {
     const nameParts = (data.fullName || "").trim().split(/\s+/);
     const rawWhatsapp = (data.whatsapp || "").replace(/\D/g, "");
     const normalizedPhone = rawWhatsapp.length === 10 ? "91" + rawWhatsapp : rawWhatsapp;
-    fbq("set", "userData", {
-      em: data.email,
+    // fbq("init", id, userData) — the Pixel's documented advanced-matching
+    // call (fbq("set","userData") did not update the details). Sends no event.
+    fbq("init", SITE_CONFIG.META_PIXEL_ID, {
+      em: (data.email || "").trim().toLowerCase(),
+      country: "in",
       ph: normalizedPhone,
       fn: nameParts[0] || "",
       ln: nameParts.slice(1).join(" ") || "",
