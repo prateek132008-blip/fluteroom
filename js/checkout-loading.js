@@ -1,87 +1,75 @@
 /* ==========================================================================
    THE FLUTE ROOM — checkout-loading.js
-   PURELY VISUAL reassurance screen shown between "Get the eBook" (form
-   submit) and the Razorpay payment window opening.
+   PURELY VISUAL countdown on the "Get the eBook" button while the existing
+   flow opens Razorpay:  "Opening secure payment… 8s" → 7s → … → 1s,
+   then "Still opening payment…" if it takes longer than 8 seconds.
 
    It does NOT control payment in any way:
-   - It never opens, delays or waits for Razorpay.
-   - It makes no network requests.
-   - The countdown is decoration only. js/ebook.js hides this screen the
-     instant Razorpay opens (or the flow stops with an error), whether that
-     happens after 1 second or after the countdown has ended.
-   - Every function is wrapped in try/catch so a problem here can never throw
-     into the payment code.
+   - It never opens, delays or waits for Razorpay, and makes no network calls.
+   - js/ebook.js calls show() when the button switches to "Preparing
+     payment..." and hide() the instant Razorpay opens (or the flow stops with
+     an error) — whether that is after 50 ms or after the countdown ended.
+   - Everything is wrapped in try/catch so it can never throw into payment code.
 
    Used by js/ebook.js through:  window.TFRCheckoutLoading.show() / .hide()
-   Markup + styles: #checkoutLoading in alankaars-ebook.html.
    ========================================================================== */
 (function () {
-  var COUNTDOWN_FROM = 8;        // seconds shown in "Opening payment page in N seconds…"
-  var FAILSAFE_HIDE_MS = 30000;  // visual safety net: never leave the screen up forever
+  var COUNTDOWN_FROM = 8; // seconds
 
-  var el, countEl, msgEl, subEl;
-  var tickTimer = null, failsafeTimer = null, remaining = 0, visible = false;
+  var btn = null, timer = null, remaining = 0, active = false;
 
-  function grab() {
-    if (el) return true;
-    el = document.getElementById("checkoutLoading");
-    if (!el) return false;
-    countEl = document.getElementById("checkoutLoadingCount");
-    msgEl = document.getElementById("checkoutLoadingTitle");
-    subEl = document.getElementById("checkoutLoadingSub");
-    return true;
+  function getBtn() {
+    if (!btn) btn = document.getElementById("ebookSubmitBtn");
+    return btn;
   }
 
-  function setCountText() {
-    if (!countEl) return;
-    if (remaining > 0) {
-      countEl.textContent = "Opening payment page in " + remaining + (remaining === 1 ? " second…" : " seconds…");
-    } else {
-      // Past 8 s: be honest — nothing has been paid, it's just slower.
-      countEl.textContent = "Taking a little longer than usual… Please wait.";
-    }
+  function render() {
+    if (!btn) return;
+    btn.textContent = remaining > 0
+      ? "Opening secure payment… " + remaining + "s"
+      : "Still opening payment…";
   }
 
-  function clearTimers() {
-    if (tickTimer) { clearInterval(tickTimer); tickTimer = null; }
-    if (failsafeTimer) { clearTimeout(failsafeTimer); failsafeTimer = null; }
+  function stopTimer() {
+    if (timer) { clearInterval(timer); timer = null; }
   }
 
   function show() {
     try {
-      if (!grab() || visible) return;
-      visible = true;
+      if (!getBtn() || active) return;
+      active = true;
       remaining = COUNTDOWN_FROM;
-      if (msgEl) msgEl.textContent = "Processing your request…";
-      if (subEl) subEl.textContent = "Your secure payment page will open shortly.";
-      setCountText();
-      el.classList.add("open");
-      el.setAttribute("aria-hidden", "false");
-      clearTimers();
-      tickTimer = setInterval(function () {
+      btn.disabled = true;                    // double-click protection (ebook.js also guards)
+      btn.setAttribute("aria-busy", "true");
+      render();
+      stopTimer();
+      timer = setInterval(function () {
         try {
+          if (!active) return stopTimer();
           if (remaining > 0) remaining--;
-          setCountText();
-          if (remaining <= 0 && tickTimer) { clearInterval(tickTimer); tickTimer = null; }
+          render();
+          if (remaining <= 0) stopTimer();     // keep "Still opening payment…" until hide()
         } catch (e) { /* visual only */ }
       }, 1000);
-      failsafeTimer = setTimeout(hide, FAILSAFE_HIDE_MS);
     } catch (e) { /* visual only — never affect checkout */ }
   }
 
   function hide() {
     try {
-      clearTimers();
-      visible = false;
-      if (!grab()) return;
-      el.classList.remove("open");
-      el.setAttribute("aria-hidden", "true");
+      stopTimer();
+      if (!active) return;
+      active = false;
+      if (!getBtn()) return;
+      btn.removeAttribute("aria-busy");
+      // Restore the normal label. Enabling/disabling stays with js/ebook.js
+      // (it re-enables the button when Razorpay is closed or fails).
+      var price = (typeof EBOOK_CONFIG === "object" && EBOOK_CONFIG.EBOOK_PRICE) || 399;
+      btn.textContent = "Get the eBook — ₹" + price;
     } catch (e) { /* visual only */ }
   }
 
-  // If the customer comes back to this page via the Back button (page
-  // restored from cache), never show a stale loading screen.
-  window.addEventListener("pageshow", function () { hide(); });
+  // Coming back via the Back button (page restored from cache): no stale timer.
+  window.addEventListener("pageshow", function (e) { if (e.persisted) hide(); });
 
   window.TFRCheckoutLoading = { show: show, hide: hide };
 })();
