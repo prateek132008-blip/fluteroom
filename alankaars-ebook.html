@@ -262,6 +262,14 @@ fbq('track', 'PageView');
   .pr-upi-id { flex: 1; min-width: 0; text-align: left; font-family: var(--font-display); font-weight: 700; font-size: 17px; color: var(--ink); word-break: break-all; user-select: all; -webkit-user-select: all; }
   .pr-copy-btn { flex-shrink: 0; background: var(--orange); color: #fff; border: none; border-radius: 100px; padding: 10px 14px; font-weight: 700; font-size: 13px; cursor: pointer; }
   .pr-copied { min-height: 18px; margin-top: 8px; font-size: 13px; font-weight: 700; color: #1F7A4D; }
+  .pr-apps { margin-top: 16px; }
+  .pr-apps-label { display: block; font-size: 11.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-soft); margin-bottom: 8px; }
+  .pr-app-card { background: var(--white); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 14px; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+  .pr-app-top, .pr-app-row { display: flex; justify-content: center; align-items: center; gap: 18px; flex-wrap: wrap; }
+  .pr-app { display: inline-flex; align-items: center; justify-content: center; }
+  .pr-app img { height: 34px; width: auto; display: block; object-fit: contain; }
+  .pr-app-top .pr-app img { height: 38px; }
+  .pr-app-text { font-size: 12.5px; font-weight: 700; color: var(--ink); white-space: nowrap; padding: 6px 10px; border-radius: 8px; background: var(--cream); }
   .pr-payee { margin-top: 10px; padding: 10px 12px; border-radius: var(--radius); background: #EAF6EF; border: 1px solid #9FD3B4; font-size: 13px; color: #14563A; text-align: left; }
   .pr-payee strong { color: #0F4A31; letter-spacing: 0.04em; }
   .pr-payee span { display: block; margin-top: 3px; font-size: 12px; color: #3F6B55; }
@@ -727,6 +735,14 @@ fbq('track', 'PageView');
         <li>We verify your payment from the screenshot</li>
         <li>Your eBook access is then sent to you on WhatsApp and email</li>
       </ul>
+    </div>
+
+    <div class="pr-apps">
+      <span class="pr-apps-label">Works with all UPI apps</span>
+      <div class="pr-app-card">
+        <div class="pr-app-top" id="payAppTop"></div>
+        <div class="pr-app-row" id="payAppRow"></div>
+      </div>
     </div>
 
     <div class="pr-support">
