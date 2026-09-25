@@ -208,9 +208,9 @@ fbq('track', 'PageView');
   @media (max-width: 640px) { .ebook-review-grid { grid-template-columns: 1fr; } }
   .ebook-review-grid .review-card { min-width: 0; width: 100%; }
 
-  /* ---- Payment-failed recovery popup (new) ----
-     Shown ONLY when Razorpay reports a failed payment (payment.failed) or
-     the payment window cannot load. Reuses the site's colour tokens,
+  /* ---- Payment recovery popup ----
+     Opens ONLY when the customer taps the floating "Payment failed? — Pay
+     here" button (never automatically). Reuses the site's colour tokens,
      .btn/.btn-primary and the same overlay pattern as the certificate modal. */
   .pay-recovery-overlay {
     position: fixed; inset: 0; z-index: 1100;
@@ -272,7 +272,49 @@ fbq('track', 'PageView');
   .pr-support { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line); font-size: 13px; color: var(--ink-soft); }
   .pr-support-actions { display: flex; gap: 8px; justify-content: center; margin-top: 8px; flex-wrap: wrap; }
   .pr-support-actions a { border: 1.5px solid var(--line); border-radius: 100px; padding: 8px 14px; font-weight: 700; color: var(--ink); font-size: 13px; }
-  .pr-reopen { background: none; border: none; color: var(--orange-deep); text-decoration: underline; font-weight: 700; font-size: 13px; cursor: pointer; margin-top: 6px; }
+  .pr-already {
+    background: #EAF6EF; border: 1.5px solid #9FD3B4; border-radius: var(--radius);
+    padding: 14px 16px; margin-bottom: 16px; text-align: left; font-size: 14px; color: #14563A;
+  }
+  .pr-already strong { display: block; font-size: 15px; margin-bottom: 4px; color: #0F4A31; }
+  .pr-already a { display: inline-flex; align-items: center; gap: 6px; margin-top: 10px; font-weight: 700; color: #fff; background: #1F7A4D; border-radius: 100px; padding: 9px 16px; font-size: 13.5px; }
+
+  /* ---- Floating "Payment failed? — Pay here" button ----
+     Sits directly above the existing WhatsApp float (exact position is set by
+     js/ebook.js from the WhatsApp button's real size; the bottom values here
+     are the fallback). Full text always visible. The ring is a slowly
+     rotating conic-gradient border + soft blurred halo of the same gradient. */
+  @property --pr-angle { syntax: "<angle>"; initial-value: 0deg; inherits: false; }
+  .pay-help-float {
+    position: fixed; right: 24px; bottom: 104px; z-index: 861;
+    padding: 2px; border: none; border-radius: 100px; cursor: pointer;
+    background: conic-gradient(from var(--pr-angle), rgba(255,122,0,0.15) 0deg, var(--orange) 70deg, #FFD3A8 110deg, rgba(255,122,0,0.15) 170deg, rgba(255,122,0,0.15) 360deg);
+    animation: pr-spin 4s linear infinite;
+    box-shadow: 0 10px 26px rgba(255,122,0,0.28);
+    transition: opacity 0.25s var(--ease), transform 0.25s var(--ease);
+    -webkit-tap-highlight-color: transparent;
+  }
+  .pay-help-float::before {
+    content: ""; position: absolute; inset: -3px; border-radius: inherit; z-index: -1;
+    background: conic-gradient(from var(--pr-angle), transparent 0deg, rgba(255,122,0,0.55) 80deg, transparent 170deg, transparent 360deg);
+    filter: blur(7px); opacity: 0.7;
+    animation: pr-spin 4s linear infinite;
+  }
+  .pay-help-float-inner {
+    display: flex; align-items: center; gap: 8px;
+    background: var(--ink); color: #fff; border-radius: 100px;
+    padding: 11px 18px; font-family: var(--font-body); font-size: 13.5px; font-weight: 700; white-space: nowrap;
+  }
+  .pay-help-float-inner .pay-here { color: #FFB066; }
+  .pay-help-float:hover { transform: translateY(-2px); }
+  .pay-help-float:focus-visible { outline: 3px solid var(--orange-light); outline-offset: 3px; }
+  .pay-help-float.is-tucked { opacity: 0; pointer-events: none; transform: translateY(8px); }
+  @keyframes pr-spin { to { --pr-angle: 360deg; } }
+  @media (max-width: 760px) {
+    .pay-help-float { right: 16px; bottom: calc(150px + env(safe-area-inset-bottom, 0px)); }
+    .pay-help-float-inner { padding: 10px 15px; font-size: 13px; }
+  }
+
   @media (max-width: 380px) {
     .pay-recovery { padding: 22px 16px 18px; }
     .pr-upi-id { font-size: 15px; }
@@ -578,7 +620,6 @@ fbq('track', 'PageView');
 
         <button type="submit" class="btn btn-primary btn-block" id="ebookSubmitBtn" style="margin-top:18px;">Get the eBook — <span data-ebook-price>₹399</span></button>
         <div class="form-status" id="ebookFormStatus"></div>
-        <div style="text-align:center;"><button type="button" class="pr-reopen" id="payRecoveryReopen" hidden>Having trouble? Pay manually via UPI</button></div>
         <p style="font-size:12px;color:var(--ink-soft);text-align:center;margin-top:14px;">
           By purchasing you agree to our <a href="policies/terms.html" style="text-decoration:underline;">Terms</a> and <a href="policies/refund.html" style="text-decoration:underline;">Refund Policy</a>.
         </p>
@@ -627,10 +668,10 @@ fbq('track', 'PageView');
   </div>
 </footer>
 
-<!-- ============================= PAYMENT-FAILED RECOVERY POPUP (new) =============================
-     Opened by js/ebook.js ONLY when Razorpay reports a failed payment, or the
-     payment window can't load. Closing Razorpay without paying does NOT open it.
-     UPI ID / QR image / phone come from js/config.js (EBOOK_CONFIG.MANUAL_UPI_*). -->
+<!-- ============================= PAYMENT RECOVERY POPUP =============================
+     Opened ONLY when the customer taps the floating "Payment failed? — Pay
+     here" button below — never automatically.
+     QR image / UPI ID / WhatsApp / phone come from js/config.js → PAYMENT_RECOVERY. -->
 <div class="pay-recovery-overlay" id="payRecovery" role="dialog" aria-modal="true" aria-labelledby="payRecoveryTitle" aria-hidden="true">
   <div class="pay-recovery">
     <button type="button" class="pay-recovery-close" id="payRecoveryClose" aria-label="Close">
@@ -640,8 +681,17 @@ fbq('track', 'PageView');
     <div class="pr-icon" aria-hidden="true">
       <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="9"/><path d="M12 7.5v5.5M12 16.5h.01"/></svg>
     </div>
-    <h3 id="payRecoveryTitle">Payment Failed</h3>
-    <p class="pr-lede" id="payRecoveryLede">Your payment could not be completed using the selected payment method. Don't worry — you can try again, or pay manually using UPI.</p>
+    <h3 id="payRecoveryTitle">Payment failed?</h3>
+    <p class="pr-lede" id="payRecoveryLede">Don't worry — you can retry the payment, or complete it manually using UPI below.</p>
+
+    <div class="pr-already">
+      <strong>Already paid?</strong>
+      Send your payment screenshot on WhatsApp and we'll verify it and provide your access.
+      <br><a id="payAlreadyPaidWa" href="#" target="_blank" rel="noopener">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.5 2 2 6.5 2 12c0 1.8.5 3.5 1.3 5L2 22l5.2-1.3c1.4.8 3.1 1.3 4.8 1.3 5.5 0 10-4.5 10-10S17.5 2 12 2z"/></svg>
+        Send Screenshot on WhatsApp
+      </a>
+    </div>
 
     <button type="button" class="btn btn-primary btn-block" id="payRetryBtn">Retry Payment</button>
 
@@ -684,6 +734,12 @@ fbq('track', 'PageView');
     </div>
   </div>
 </div>
+
+<!-- ============================= FLOATING PAYMENT RECOVERY BUTTON =============================
+     Permanent recovery path — opens the popup above when tapped. -->
+<button type="button" class="pay-help-float" id="payHelpFloat" aria-haspopup="dialog" aria-controls="payRecovery">
+  <span class="pay-help-float-inner">Payment failed? — <span class="pay-here">Pay here</span></span>
+</button>
 
 <!-- ============================= WHATSAPP SUPPORT FLOAT ============================= -->
 <button class="whatsapp-float" id="supportFloat">
