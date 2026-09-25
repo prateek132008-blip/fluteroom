@@ -7,23 +7,64 @@
 
    Reuses: the SAME Meta Pixel (already initialized in this page's <head>,
    same ID as the rest of the site) and the SAME Razorpay public key from
-   js/config.js (SITE_CONFIG). Writes to a SEPARATE Google Sheet via a
-   SEPARATE Apps Script (EBOOK_CONFIG.EBOOK_GOOGLE_SCRIPT_URL).
+   js/config.js (SITE_CONFIG). Talks to a SEPARATE Apps Script
+   (EBOOK_CONFIG.EBOOK_GOOGLE_SCRIPT_URL).
 
-   Sections: 1) Form + validation  2) Razorpay checkout  3) Apps Script call
-             4) Meta Pixel events (Lead / InitiateCheckout — deduped like main.js)
+   Sections: 1) Form + validation  2) Razorpay order + checkout
+             3) Payment recovery (UPI app hand-off / stuck "processing")
+             4) Apps Script calls  5) Meta Pixel events
+
+   PAYMENT-FLOW CHANGES IN THIS VERSION (see audit notes):
+   - A real Razorpay ORDER is created server-side (Apps Script) and passed to
+     checkout as order_id. Previously no order was created, so Razorpay's
+     auto-capture setting did not apply and payments could stay "authorized".
+     The order is PRE-FETCHED in the background as soon as the customer
+     starts filling the form, so checkout normally opens instantly. The wait
+     on submit is capped at 8 s; if Apps Script is slow/down, checkout still
+     opens (order-less fallback) — the server captures those payments later.
+   - The same order + attempt ID is REUSED when the customer retries, so a
+     failed-then-successful purchase is ONE sheet row, not a stale "Pending"
+     row plus a separate paid row.
+   - RECOVERY: if the checkout success handler never runs (page reloaded /
+     killed while the customer was in the UPI app, or Razorpay's "Payment
+     processing" screen never resolves), the page asks the server — which
+     asks Razorpay — whether the order was paid, and sends the customer to
+     the Thank You page if it was. Runs when the tab becomes visible again
+     during checkout, after the popup is closed, and on the next page load.
+   - The success handler no longer depends on localStorage/sessionStorage
+     working (they can throw in some in-app browsers); the payment ID is
+     carried in the Thank You page URL.
+   - A missing/failed checkout.js no longer leaves the button stuck on
+     "Preparing payment..." forever.
+   - The eBook link is no longer shipped to the browser — the Thank You page
+     receives it from the server only after the payment is verified.
    ========================================================================== */
 
 document.addEventListener("DOMContentLoaded", () => {
   const yearEl = document.getElementById("year");
   if (yearEl) yearEl.textContent = new Date().getFullYear();
 
-  // ---- Fill in price / cover image / drive-link-dependent bits from config ----
+  // ---- Fill in price / cover image from config ----
   document.querySelectorAll("[data-ebook-price]").forEach(el => {
     el.textContent = "₹" + EBOOK_CONFIG.EBOOK_PRICE;
   });
   const coverImg = document.getElementById("ebookCoverImg");
   if (coverImg) coverImg.src = EBOOK_CONFIG.EBOOK_COVER_IMAGE;
+
+  /* ============ SAFE STORAGE (new) ============
+     localStorage / sessionStorage can THROW (private mode, blocked cookies,
+     some Instagram/Facebook in-app browsers). Previously an exception here
+     inside the Razorpay success handler would stop window.location.replace()
+     from ever running — a paid customer stuck on "Confirming payment...". */
+  function storeGet(area, key) {
+    try { return window[area].getItem(key); } catch (e) { return null; }
+  }
+  function storeSet(area, key, value) {
+    try { window[area].setItem(key, value); } catch (e) { /* ignore */ }
+  }
+  function storeRemove(area, key) {
+    try { window[area].removeItem(key); } catch (e) { /* ignore */ }
+  }
 
   /* ============ MOBILE NAV DRAWER (same behavior as the rest of the site) ============ */
   const drawer = document.getElementById("mobileDrawer");
@@ -53,293 +94,20 @@ document.addEventListener("DOMContentLoaded", () => {
   }, { threshold: 0.15 });
   revealEls.forEach(el => io.observe(el));
 
-  /* ============ 1. FORM + VALIDATION ============ */
-  const form = document.getElementById("ebookForm");
-  const submitBtn = document.getElementById("ebookSubmitBtn");
-  const formStatus = document.getElementById("ebookFormStatus");
-  if (!form) return;
-
-  function showError(fieldName, message) {
-    const el = form.querySelector(`[data-error-for="${fieldName}"]`);
-    if (el) el.textContent = message || "";
+  // Stable per-session ID used to build unique, deduplicated Pixel event IDs —
+  // kept separate from main.js's tfr_session_id so the two flows never collide.
+  if (!storeGet("sessionStorage", "tfr_ebook_session_id")) {
+    storeSet("sessionStorage", "tfr_ebook_session_id", Date.now() + "_" + Math.random().toString(36).slice(2));
   }
 
-  /* ============ META EMQ HELPERS (new) ============
-     Small, self-contained helpers used to improve Meta Purchase Event Match
-     Quality: reading the Pixel's own _fbp/_fbc browser-id cookies (or
-     deriving _fbc from a ?fbclid= URL param per Meta's documented format
-     when the cookie hasn't been set yet), and splitting the name field for
-     Advanced Matching / Conversions API. Pure helpers — no side effects. */
-  function getCookie(name) {
-    const match = document.cookie.match(new RegExp("(^| )" + name + "=([^;]+)"));
-    return match ? decodeURIComponent(match[2]) : "";
-  }
-  function getFbc() {
-    const existing = getCookie("_fbc");
-    if (existing) return existing;
-    const params = new URLSearchParams(window.location.search);
-    const fbclid = params.get("fbclid");
-    if (!fbclid) return "";
-    // Meta's documented fbc format: fb.{subdomainIndex}.{creationTime}.{fbclid}
-    return `fb.1.${Date.now()}.${fbclid}`;
-  }
-  function splitName(fullName) {
-    const parts = (fullName || "").trim().split(/\s+/);
-    return { firstName: parts[0] || "", lastName: parts.slice(1).join(" ") || "" };
-  }
-  // NEW: matches Ebook_Code.gs's normalizePhone() exactly (assumes India/+91
-  // for any bare 10-digit number). Without this, the Pixel's own client-side
-  // hashing of "ph" only strips non-digits — it does NOT add a country code —
-  // so the same phone number would hash differently between the browser
-  // Purchase event and the server CAPI Purchase event.
-  function normalizePhoneForPixel(phone) {
-    const digits = (phone || "").replace(/\D/g, "");
-    if (digits.length === 10) return "91" + digits;
-    return digits;
-  }
-  function generateOrderId() {
-    const year = new Date().getFullYear();
-    const random = Math.floor(1000 + Math.random() * 9000);
-    return `EBK-${year}-${random}`;
-  }
-
-  function validateForm(data) {
-    let valid = true;
-    ["fullName", "email", "whatsapp"].forEach(f => showError(f, ""));
-
-    if (!data.fullName || data.fullName.trim().length < 2) { showError("fullName", "Please enter your full name."); valid = false; }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email || "")) { showError("email", "Please enter a valid email — your eBook link is sent here."); valid = false; }
-    if (!/^\d{10}$/.test((data.whatsapp || "").replace(/\D/g, "").slice(-10))) { showError("whatsapp", "Please enter a valid 10-digit WhatsApp number."); valid = false; }
-    return valid;
-  }
-
-  form.addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const formData = new FormData(form);
-    const data = Object.fromEntries(formData.entries());
-
-    if (!validateForm(data)) {
-      formStatus.textContent = "Please fix the highlighted fields above.";
-      formStatus.style.color = "#C0392B";
-      return;
-    }
-
-    // ---- Advanced Matching: give the Pixel the customer's plain-text info so it
-    // can hash + attach it to every subsequent event on this page (raises EMQ).
-    // Meta's fbevents.js hashes these values client-side before they ever leave
-    // the browser — we never send raw or hashed PII to Meta ourselves here. ----
-    const { firstName, lastName } = splitName(data.fullName);
-    if (typeof fbq === "function") {
-      // NEW: external_id (raw here — fbevents.js hashes it client-side, same
-      // as em/ph/fn/ln) gives Meta an extra, independent match signal beyond
-      // em/ph, sourced from the already-collected email — nothing new is
-      // gathered. ph is now normalized the same way the GAS backend does,
-      // so browser and server events hash the same digits.
-      fbq("set", "userData", {
-        em: data.email,
-        ph: normalizePhoneForPixel(data.whatsapp),
-        fn: firstName,
-        ln: lastName,
-        external_id: (data.email || "").trim().toLowerCase()
-      });
-    }
-
-    // ---- Fire Lead + InitiateCheckout ONLY here, after the user submits the form ----
-    firePixelLead(data);
-    firePixelInitiateCheckout();
-
-    submitBtn.disabled = true;
-    submitBtn.textContent = "Preparing payment...";
-    formStatus.textContent = "";
-
-    // ---- Capture the Meta browser/click IDs and the order ID now, BEFORE payment,
-    // so the SAME values can be (a) saved to the sheet, (b) passed through to
-    // Razorpay as "notes" so the webhook/Conversions API call can use them later,
-    // and (c) reused by the success page — all for the same customer/attempt. ----
-    const orderId = generateOrderId();
-    const fbp = getCookie("_fbp");
-    const fbc = getFbc();
-    const userAgent = navigator.userAgent;
-
-    // ---- Save the customer record as "Pending" BEFORE opening Razorpay,
-    // exactly like the flute-class enrollment flow already does — so a lead is
-    // never lost if the customer closes the payment popup or abandons checkout.
-    // saveToEbookSheet() upserts by Order ID, so this never creates a duplicate
-    // row when we update it to "Paid" after payment succeeds.
-    // FIXED: this is now fire-and-forget (matches the post-payment call below)
-    // instead of being awaited. Google Apps Script Web App calls can be slow
-    // or unpredictable (cold starts, concurrent-request queuing) with no
-    // client-side timeout, so awaiting this here was delaying Razorpay from
-    // opening at all — sometimes for minutes — which is what customers were
-    // seeing as a stuck/loading checkout. keepalive: true (inside
-    // saveToEbookSheet) still lets this request finish in the background. ----
-    void saveToEbookSheet({
-      ...data,
-      orderId,
-      paymentId: "",
-      paymentStatus: "Pending",
-      product: "ebook",
-      productName: EBOOK_CONFIG.EBOOK_NAME,
-      amount: EBOOK_CONFIG.EBOOK_PRICE,
-      fbp, fbc, userAgent
-    }).catch(err => {
-      console.error("Ebook Apps Script pre-payment save failed (continuing to checkout anyway):", err);
-    });
-
-    // Open Razorpay immediately. The background save above must never delay the
-    // payment popup from appearing, even if the Apps Script is slow or cold.
-    openRazorpayCheckout(data, { orderId, fbp, fbc, userAgent });
-  });
-
-  /* ============ 2. RAZORPAY CHECKOUT ============ */
-  function openRazorpayCheckout(data, meta) {
-    const { orderId, fbp, fbc, userAgent } = meta;
-    const options = {
-      key: SITE_CONFIG.RAZORPAY_KEY_ID, // reuses the SAME public key as the rest of the site
-      amount: EBOOK_CONFIG.EBOOK_PRICE * 100, // Razorpay expects paise
-      currency: "INR",
-      name: SITE_CONFIG.BUSINESS_NAME,
-      description: EBOOK_CONFIG.EBOOK_NAME + " — eBook",
-      image: SITE_CONFIG.BUSINESS_LOGO,
-      prefill: {
-        name: data.fullName,
-        email: data.email,
-        contact: data.whatsapp
-      },
-      notes: {
-        product: "ebook",
-        product_name: EBOOK_CONFIG.EBOOK_NAME,
-        order_id: orderId,
-        // fbp/fbc travel with the Razorpay order/payment itself so the server-side
-        // webhook (the source of truth for "paid") can send a matching Conversions
-        // API Purchase event with these same browser IDs, even though a webhook
-        // has no access to the customer's cookies directly.
-        fbp: fbp || "",
-        fbc: fbc || "",
-        // NEW: the Drive link travels with the payment too, so the webhook (which
-        // is what actually sends the delivery email now — see Ebook_Code.gs) can
-        // put it in the email without needing to hardcode it a second time.
-        ebook_link: EBOOK_CONFIG.EBOOK_DRIVE_LINK || ""
-      },
-      theme: { color: "#FF7A00" },
-
-      // NOTE ON SECURITY: exactly like the main enrollment flow, this client-side
-      // handler is treated as the fast path (so the customer is never blocked from
-      // their eBook), while the Razorpay webhook configured against the eBook Apps
-      // Script (see google-apps-script/Ebook_Code.gs) is the server-verified source
-      // of truth for "payment succeeded" — see README section in that file.
-      handler: async function (response) {
-        submitBtn.textContent = "Confirming payment...";
-
-        // NOTE: reuses the SAME orderId generated before payment — this updates
-        // the existing "Pending" row to "Paid" instead of creating a second,
-        // duplicate customer record for the same purchase.
-        const payload = {
-          ...data,
-          orderId,
-          paymentId: response.razorpay_payment_id,
-          paymentStatus: "Paid",
-          product: "ebook",
-          productName: EBOOK_CONFIG.EBOOK_NAME,
-          amount: EBOOK_CONFIG.EBOOK_PRICE,
-          ebookLink: EBOOK_CONFIG.EBOOK_DRIVE_LINK,
-          fbp, fbc, userAgent
-        };
-
-        // CHANGED: fire-and-forget instead of awaiting. This is a fast path only —
-        // it updates the order row (Pending -> Paid) and, as a backup, can trigger
-        // the confirmation email. We deliberately do NOT wait for it to finish
-        // before sending the customer to the thank-you page: that round trip to
-        // Apps Script was exactly what caused the "payment successful -> long
-        // wait -> success page" delay. { keepalive: true } lets the request keep
-        // running in the background even after we navigate away, so it still
-        // reliably reaches the server. The Razorpay webhook (server-side, see
-        // Ebook_Code.gs) remains the AUTHORITATIVE confirmation — it verifies the
-        // payment independently and is what actually guarantees the row gets
-        // marked Paid and the delivery email gets sent, even if this request or
-        // the customer's browser never completes it.
-        void saveToEbookSheet(payload).catch(err => {
-          console.error("Ebook Apps Script call failed (webhook will still confirm):", err);
-        });
-
-        const successStorageKey = "tfr_ebook_success_payload";
-        sessionStorage.setItem(successStorageKey, JSON.stringify(payload));
-        localStorage.setItem(successStorageKey, JSON.stringify(payload));
-        window.location.replace("ebook-success.html");
-      },
-      modal: {
-        // Fires if the user closes the popup without paying — no pixel event, no record.
-        ondismiss: function () {
-          submitBtn.disabled = false;
-          submitBtn.textContent = "Get the eBook — ₹" + EBOOK_CONFIG.EBOOK_PRICE;
-          formStatus.textContent = "Payment was not completed. You can try again anytime.";
-          formStatus.style.color = "var(--ink-soft)";
-        }
-      }
-    };
-
-    const rzp = new Razorpay(options);
-    rzp.on("payment.failed", function () {
-      submitBtn.disabled = false;
-      submitBtn.textContent = "Get the eBook — ₹" + EBOOK_CONFIG.EBOOK_PRICE;
-      formStatus.textContent = "Payment failed. Please try again or contact support.";
-      formStatus.style.color = "#C0392B";
-    });
-    rzp.open();
-  }
-
-  /* ============ 3. SEPARATE EBOOK APPS SCRIPT SUBMISSION ============
-     Deliberately a DIFFERENT endpoint from js/main.js's saveToSheet(), so
-     the existing flute-class Google Sheet/Script is never touched. */
-  function saveToEbookSheet(payload) {
-    if (!EBOOK_CONFIG.EBOOK_GOOGLE_SCRIPT_URL || EBOOK_CONFIG.EBOOK_GOOGLE_SCRIPT_URL.startsWith("NEEDS_CONFIGURATION")) {
-      console.warn("Ebook Google Apps Script URL not configured — skipping sheet save/email.");
-      return Promise.resolve();
-    }
-    const params = new URLSearchParams(payload).toString();
-    // Keep this request fully backgrounded: do not await it before opening
-    // Razorpay. If Apps Script is slow or cold, we still want the payment popup
-    // to appear immediately while the server-side save continues in parallel.
-    return fetch(`${EBOOK_CONFIG.EBOOK_GOOGLE_SCRIPT_URL}?${params}`, {
-      method: "GET",
-      keepalive: true
-    });
-  }
-
-  /* ============ 4. META PIXEL — LEAD + INITIATE CHECKOUT ============
-     Reuses the SAME Pixel already initialized in this page's <head> (same ID
-     as the rest of the site — no second fbq('init', ...) anywhere). Both fire
-     ONLY from this submit handler — never on page load or button click alone. */
-  function firePixelLead(data) {
-    if (typeof fbq !== "function") return;
-    const eventId = "ebook_lead_" + sessionStorage.getItem("tfr_ebook_session_id");
-    fbq("track", "Lead", { content_name: EBOOK_CONFIG.EBOOK_NAME }, { eventID: eventId });
-  }
-  function firePixelInitiateCheckout() {
-    if (typeof fbq !== "function") return;
-    const eventId = "ebook_checkout_" + sessionStorage.getItem("tfr_ebook_session_id");
-    fbq("track", "InitiateCheckout", {
-      value: EBOOK_CONFIG.EBOOK_PRICE,
-      currency: "INR",
-      content_name: EBOOK_CONFIG.EBOOK_NAME
-    }, { eventID: eventId });
-  }
-
-  // Stable per-session ID used to build unique, deduplicated event IDs — kept
-  // separate from main.js's tfr_session_id so the two flows never collide.
-  if (!sessionStorage.getItem("tfr_ebook_session_id")) {
-    sessionStorage.setItem("tfr_ebook_session_id", Date.now() + "_" + Math.random().toString(36).slice(2));
-  }
-
-  /* ============ EBOOK PREVIEW NAVIGATOR (new) ============
+  /* ============ EBOOK PREVIEW NAVIGATOR ============
      View-only page viewer for the "Preview the eBook" section. Pages are
      pre-rendered images from the preview PDF (assets/ebook-preview/) — the
      PDF itself is never linked from the page. Right-click/drag are disabled
-     on the image, and a tiled "PREVIEW" watermark (pure CSS, see the
-     .ebook-preview-watermark rule in this page's <style>) sits over every
-     page — casual-copy deterrents only; none of this stops a determined
-     user from screenshotting the page, and it doesn't claim to. Completely
-     separate from the form/Razorpay/Pixel/Sheet logic above. */
+     on the image, and a tiled "PREVIEW" watermark (pure CSS) sits over every
+     page — casual-copy deterrents only. Completely separate from the
+     form/Razorpay/Pixel/Sheet logic below. (Moved above the form code,
+     unchanged, so it can never be skipped by an early return.) */
   const previewImages = [
     "assets/ebook-preview/alankaar-preview-1.webp",
     "assets/ebook-preview/alankaar-preview-2.webp",
@@ -386,5 +154,447 @@ document.addEventListener("DOMContentLoaded", () => {
       const msg = encodeURIComponent("Hi, I have a question about the 30 Alankaras for Flute eBook.");
       window.open(`https://wa.me/${SITE_CONFIG.WHATSAPP_NUMBER}?text=${msg}`, "_blank");
     });
+  }
+
+  /* ============ 1. FORM + VALIDATION ============ */
+  const form = document.getElementById("ebookForm");
+  const submitBtn = document.getElementById("ebookSubmitBtn");
+  const formStatus = document.getElementById("ebookFormStatus");
+  if (!form) return;
+
+  const SUCCESS_KEY = "tfr_ebook_success_payload";
+  const ATTEMPT_KEY = "tfr_ebook_attempt";
+  const ATTEMPT_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+  const ORDER_WAIT_MS = 8000;
+
+  function showError(fieldName, message) {
+    const el = form.querySelector(`[data-error-for="${fieldName}"]`);
+    if (el) el.textContent = message || "";
+  }
+  function resetButton() {
+    submitBtn.disabled = false;
+    submitBtn.textContent = "Get the eBook — ₹" + EBOOK_CONFIG.EBOOK_PRICE;
+  }
+  function setStatus(text, color) {
+    formStatus.textContent = text;
+    formStatus.style.color = color || "var(--ink-soft)";
+  }
+
+  /* ============ META EMQ HELPERS ============ */
+  function getCookie(name) {
+    const match = document.cookie.match(new RegExp("(^| )" + name + "=([^;]+)"));
+    return match ? decodeURIComponent(match[2]) : "";
+  }
+  function getFbc() {
+    const existing = getCookie("_fbc");
+    if (existing) return existing;
+    const params = new URLSearchParams(window.location.search);
+    const fbclid = params.get("fbclid");
+    if (!fbclid) return "";
+    // Meta's documented fbc format: fb.{subdomainIndex}.{creationTime}.{fbclid}
+    return `fb.1.${Date.now()}.${fbclid}`;
+  }
+  function splitName(fullName) {
+    const parts = (fullName || "").trim().split(/\s+/);
+    return { firstName: parts[0] || "", lastName: parts.slice(1).join(" ") || "" };
+  }
+  // Matches the Apps Script normalizePhone() exactly (assumes India/+91).
+  function normalizePhoneForPixel(phone) {
+    const digits = (phone || "").replace(/\D/g, "");
+    if (digits.length === 10) return "91" + digits;
+    return digits;
+  }
+
+  // FIXED: was `EBK-<year>-<4 random digits>` — only 9,000 possible IDs a
+  // year, so two customers could share an ID and the sheet upsert would
+  // overwrite one customer's row with another's. Now time + random based.
+  function generateAttemptId() {
+    let rand = "";
+    try {
+      const bytes = new Uint8Array(4);
+      window.crypto.getRandomValues(bytes);
+      rand = Array.from(bytes, b => b.toString(36).padStart(2, "0")).join("");
+    } catch (e) {
+      rand = Math.random().toString(36).slice(2, 10);
+    }
+    return ("EBK-" + Date.now().toString(36) + "-" + rand).toUpperCase().slice(0, 36);
+  }
+
+  function validateForm(data) {
+    let valid = true;
+    ["fullName", "email", "whatsapp"].forEach(f => showError(f, ""));
+
+    if (!data.fullName || data.fullName.trim().length < 2) { showError("fullName", "Please enter your full name."); valid = false; }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email || "")) { showError("email", "Please enter a valid email — your eBook link is sent here."); valid = false; }
+    if (!/^\d{10}$/.test((data.whatsapp || "").replace(/\D/g, "").slice(-10))) { showError("whatsapp", "Please enter a valid 10-digit WhatsApp number."); valid = false; }
+    return valid;
+  }
+
+  /* ============ ATTEMPT STATE (one purchase attempt, reused across retries) ============ */
+  function loadAttempt() {
+    try {
+      const a = JSON.parse(storeGet("localStorage", ATTEMPT_KEY) || "null");
+      if (a && a.attemptId && Date.now() - (a.createdAt || 0) < ATTEMPT_MAX_AGE_MS) return a;
+    } catch (e) { /* ignore */ }
+    return null;
+  }
+  function saveAttempt(a) { storeSet("localStorage", ATTEMPT_KEY, JSON.stringify(a)); }
+
+  // In-memory copy too, so everything still works if storage is unavailable.
+  let currentAttempt = loadAttempt();
+  let orderPromise = null;
+
+  /* Creates (once) the Razorpay order for this attempt via Apps Script.
+     Concurrent callers share the same promise — never two orders at once. */
+  function ensureOrder() {
+    if (currentAttempt && currentAttempt.rzpOrderId) return Promise.resolve(currentAttempt);
+    if (orderPromise) return orderPromise;
+
+    if (!currentAttempt) {
+      currentAttempt = { attemptId: generateAttemptId(), createdAt: Date.now() };
+      saveAttempt(currentAttempt);
+    }
+    const attempt = currentAttempt;
+
+    orderPromise = gasCall({ action: "createOrder", attemptId: attempt.attemptId }, 15000)
+      .then(res => {
+        if (!res || res.status !== "ok" || !res.rzpOrderId) throw new Error("createOrder failed: " + JSON.stringify(res));
+        attempt.rzpOrderId = res.rzpOrderId;
+        if (res.attemptId) attempt.attemptId = res.attemptId;
+        saveAttempt(attempt);
+        return attempt;
+      })
+      .finally(() => { orderPromise = null; });
+    return orderPromise;
+  }
+
+  function withTimeout(promise, ms) {
+    return new Promise((resolve, reject) => {
+      const t = setTimeout(() => reject(new Error("timeout")), ms);
+      promise.then(v => { clearTimeout(t); resolve(v); }, e => { clearTimeout(t); reject(e); });
+    });
+  }
+
+  // Pre-fetch the order in the background the moment the customer starts
+  // filling the form, so it is normally ready before they press the button.
+  form.addEventListener("focusin", () => {
+    ensureOrder().catch(err => console.warn("Order pre-fetch failed (will retry on submit):", err));
+  }, { once: true });
+
+  let submitting = false;
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (submitting || checkoutOpen || completed) return; // no double checkout instances
+
+    const formData = new FormData(form);
+    const data = Object.fromEntries(formData.entries());
+
+    if (!validateForm(data)) {
+      setStatus("Please fix the highlighted fields above.", "#C0392B");
+      return;
+    }
+
+    submitting = true;
+    try {
+      // ---- Advanced Matching (unchanged) ----
+      const { firstName, lastName } = splitName(data.fullName);
+      if (typeof fbq === "function") {
+        fbq("set", "userData", {
+          em: data.email,
+          ph: normalizePhoneForPixel(data.whatsapp),
+          fn: firstName,
+          ln: lastName,
+          external_id: (data.email || "").trim().toLowerCase()
+        });
+      }
+
+      // ---- Fire Lead + InitiateCheckout ONLY here, after the user submits the form ----
+      firePixelLead(data);
+      firePixelInitiateCheckout();
+
+      submitBtn.disabled = true;
+      submitBtn.textContent = "Preparing payment...";
+      formStatus.textContent = "";
+
+      const fbp = getCookie("_fbp");
+      const fbc = getFbc();
+      const userAgent = navigator.userAgent;
+
+      // ---- Get the Razorpay order (usually already pre-fetched). Capped wait:
+      // if Apps Script is slow or down, open an order-less checkout rather
+      // than blocking the sale; the server still verifies + captures it. ----
+      let attempt;
+      try {
+        attempt = await withTimeout(ensureOrder(), ORDER_WAIT_MS);
+      } catch (err) {
+        console.warn("Razorpay order not available in time — opening checkout without order_id:", err);
+        if (!currentAttempt) {
+          currentAttempt = { attemptId: generateAttemptId(), createdAt: Date.now() };
+        }
+        attempt = currentAttempt;
+      }
+
+      // ---- If this order was already opened before (a retry), make sure it
+      // wasn't actually paid already (e.g. UPI completed after the popup
+      // was closed). Prevents a customer paying twice. ----
+      if (attempt.rzpOrderId && attempt.opened) {
+        try {
+          const res = await gasCall({ action: "status", rzpOrderId: attempt.rzpOrderId }, 6000);
+          if (res && res.status === "paid") {
+            completePurchase({ paymentId: res.paymentId, rzpOrderId: attempt.rzpOrderId }, data, "recovered");
+            return;
+          }
+        } catch (err) { /* can't check — continue to checkout */ }
+      }
+
+      attempt.customer = { fullName: data.fullName, email: data.email, whatsapp: data.whatsapp };
+      saveAttempt(attempt);
+
+      // ---- Lead row as "Pending" — fire-and-forget, never blocks checkout.
+      // (Server now ignores any "Paid" status sent from the browser.) ----
+      void saveToEbookSheet({
+        ...data,
+        orderId: attempt.attemptId,
+        paymentStatus: "Pending",
+        product: "ebook",
+        productName: EBOOK_CONFIG.EBOOK_NAME,
+        amount: EBOOK_CONFIG.EBOOK_PRICE,
+        fbp, fbc, userAgent
+      }).catch(err => {
+        console.error("Ebook Apps Script pre-payment save failed (continuing to checkout anyway):", err);
+      });
+
+      openRazorpayCheckout(data, attempt, { fbp, fbc });
+    } catch (err) {
+      console.error("Checkout could not start:", err);
+      resetButton();
+      setStatus("Something went wrong starting the payment. Please try again.", "#C0392B");
+    } finally {
+      submitting = false;
+    }
+  });
+
+  /* ============ 2. RAZORPAY CHECKOUT ============ */
+  let rzp = null;
+  let checkoutOpen = false;
+  let completed = false;
+
+  function openRazorpayCheckout(data, attempt, meta) {
+    const { fbp, fbc } = meta;
+
+    // FIXED: if checkout.js failed to load (weak network / blocked), `new
+    // Razorpay` threw and the button stayed on "Preparing payment..." forever.
+    if (typeof Razorpay !== "function") {
+      resetButton();
+      setStatus("The payment window couldn't load. Please check your internet connection and try again.", "#C0392B");
+      return;
+    }
+
+    const options = {
+      key: SITE_CONFIG.RAZORPAY_KEY_ID, // public key only
+      amount: EBOOK_CONFIG.EBOOK_PRICE * 100, // paise — must equal the server-side order amount
+      currency: "INR",
+      name: SITE_CONFIG.BUSINESS_NAME,
+      description: EBOOK_CONFIG.EBOOK_NAME + " — eBook",
+      image: SITE_CONFIG.BUSINESS_LOGO,
+      prefill: {
+        name: data.fullName,
+        email: data.email,
+        contact: data.whatsapp
+      },
+      notes: {
+        product: "ebook",
+        product_name: EBOOK_CONFIG.EBOOK_NAME,
+        order_id: attempt.attemptId,
+        // lets the server create/complete the sheet row from the payment alone
+        customer_name: String(data.fullName || "").slice(0, 100),
+        // Razorpay notes values are limited to 256 characters
+        fbp: String(fbp || "").slice(0, 250),
+        fbc: String(fbc || "").slice(0, 250)
+        // ebook_link REMOVED: the link now lives only on the server.
+      },
+      theme: { color: "#FF7A00" },
+
+      handler: function (response) {
+        submitBtn.textContent = "Confirming payment...";
+        completePurchase({
+          paymentId: response.razorpay_payment_id,
+          rzpOrderId: response.razorpay_order_id || attempt.rzpOrderId || ""
+        }, data, "handler");
+      },
+      modal: {
+        ondismiss: function () {
+          checkoutOpen = false;
+          if (completed) return;
+          resetButton();
+          setStatus("Payment was not completed. You can try again anytime.");
+          // A UPI payment can still complete a little AFTER the popup is
+          // closed (customer approved in the app, came back, closed the
+          // "processing" screen). Keep checking quietly for a while.
+          if (attempt.rzpOrderId) startStatusPoll(attempt, 5000, 120000);
+        }
+      }
+    };
+    if (attempt.rzpOrderId) options.order_id = attempt.rzpOrderId;
+
+    try {
+      stopStatusPoll();
+      rzp = new Razorpay(options);
+      rzp.on("payment.failed", function () {
+        // Razorpay keeps its popup open so the customer can retry in it; the
+        // SAME order is reused, so a later success lands on the same row.
+        resetButton();
+        setStatus("Payment failed. Please try again or contact support.", "#C0392B");
+      });
+      rzp.open();
+      checkoutOpen = true;
+      attempt.opened = true;
+      saveAttempt(attempt);
+    } catch (err) {
+      console.error("Razorpay checkout failed to open:", err);
+      checkoutOpen = false;
+      resetButton();
+      setStatus("The payment window couldn't open. Please try again.", "#C0392B");
+    }
+  }
+
+  /* Single exit point to the Thank You page — whichever of (Razorpay handler,
+     visibility poll, post-dismiss poll, page-load recovery) gets there first.
+     Never waits on Apps Script. */
+  function completePurchase(info, data, via) {
+    if (completed || !info || !info.paymentId) return;
+    completed = true;
+    stopStatusPoll();
+
+    if (via !== "handler") {
+      setStatus("We found your completed payment — taking you to your eBook…", "#1F7A4D");
+      try { if (rzp && checkoutOpen) rzp.close(); } catch (e) { /* ignore */ }
+    }
+
+    const attempt = currentAttempt || {};
+    const customer = attempt.customer || data || {};
+    const payload = {
+      fullName: customer.fullName || "",
+      email: customer.email || "",
+      whatsapp: customer.whatsapp || "",
+      orderId: attempt.attemptId || "",
+      rzpOrderId: info.rzpOrderId || "",
+      paymentId: info.paymentId,
+      amount: EBOOK_CONFIG.EBOOK_PRICE,
+      productName: EBOOK_CONFIG.EBOOK_NAME,
+      via: via
+    };
+    storeSet("sessionStorage", SUCCESS_KEY, JSON.stringify(payload));
+    storeSet("localStorage", SUCCESS_KEY, JSON.stringify(payload));
+    storeRemove("localStorage", ATTEMPT_KEY); // order is paid — never reuse it
+
+    // Early server-side verification kick (fire-and-forget, keepalive so it
+    // survives navigation). The Thank You page verifies again and the webhook
+    // is a third independent path — none of them block this redirect.
+    if (isGasConfigured()) {
+      try {
+        fetch(gasUrl({ action: "verify", paymentId: info.paymentId }), { method: "GET", keepalive: true }).catch(() => {});
+      } catch (e) { /* ignore */ }
+    }
+
+    const qs = "pid=" + encodeURIComponent(info.paymentId) +
+      (attempt.attemptId ? "&oid=" + encodeURIComponent(attempt.attemptId) : "");
+    window.location.replace("ebook-success.html?" + qs);
+  }
+
+  /* ============ 3. PAYMENT RECOVERY ============ */
+  let pollTimer = null;
+  let pollToken = 0;
+
+  function stopStatusPoll() {
+    pollToken++;
+    if (pollTimer) { clearTimeout(pollTimer); pollTimer = null; }
+  }
+
+  // Asks the server (which asks Razorpay's API) whether this order has a
+  // successful payment. Only one poll loop runs at a time.
+  function startStatusPoll(attempt, intervalMs, maxMs) {
+    if (!attempt || !attempt.rzpOrderId || completed || !isGasConfigured()) return;
+    stopStatusPoll();
+    const token = pollToken;
+    const startedAt = Date.now();
+
+    const tick = () => {
+      if (token !== pollToken || completed) return;
+      gasCall({ action: "status", rzpOrderId: attempt.rzpOrderId }, 12000)
+        .then(res => {
+          if (token !== pollToken || completed) return;
+          if (res && res.status === "paid") {
+            completePurchase({ paymentId: res.paymentId, rzpOrderId: attempt.rzpOrderId }, attempt.customer, "recovered");
+          }
+        })
+        .catch(() => { /* transient — keep polling */ })
+        .finally(() => {
+          if (token !== pollToken || completed) return;
+          if (Date.now() - startedAt < maxMs) pollTimer = setTimeout(tick, intervalMs);
+        });
+    };
+    tick();
+  }
+
+  // Registered ONCE (not per checkout) — no duplicate listeners. When the
+  // customer comes back from the UPI/wallet app while checkout is open, start
+  // checking in parallel with Razorpay's own "processing" screen.
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible" && checkoutOpen && !completed && currentAttempt && currentAttempt.rzpOrderId) {
+      startStatusPoll(currentAttempt, 4000, 180000);
+    }
+  });
+
+  // Page-load recovery: the page was reloaded/killed after checkout opened
+  // (common when a phone switches to a UPI app). If that order was paid,
+  // take the customer straight to their eBook.
+  if (currentAttempt && currentAttempt.opened && currentAttempt.rzpOrderId) {
+    startStatusPoll(currentAttempt, 5000, 20000);
+  }
+
+  /* ============ 4. APPS SCRIPT CALLS ============ */
+  function isGasConfigured() {
+    const url = EBOOK_CONFIG.EBOOK_GOOGLE_SCRIPT_URL;
+    return !!url && !url.startsWith("NEEDS_CONFIGURATION");
+  }
+  function gasUrl(params) {
+    return `${EBOOK_CONFIG.EBOOK_GOOGLE_SCRIPT_URL}?${new URLSearchParams(params).toString()}`;
+  }
+
+  // JSON call with a hard timeout — no request can hang the flow.
+  function gasCall(params, timeoutMs) {
+    if (!isGasConfigured()) return Promise.reject(new Error("Ebook Apps Script URL not configured"));
+    const controller = typeof AbortController === "function" ? new AbortController() : null;
+    const timer = setTimeout(() => { if (controller) controller.abort(); }, timeoutMs);
+    return fetch(gasUrl(params), { method: "GET", cache: "no-store", signal: controller ? controller.signal : undefined })
+      .then(r => r.json())
+      .finally(() => clearTimeout(timer));
+  }
+
+  // Pre-payment "Pending" lead save (fire-and-forget).
+  function saveToEbookSheet(payload) {
+    if (!isGasConfigured()) {
+      console.warn("Ebook Google Apps Script URL not configured — skipping sheet save.");
+      return Promise.resolve();
+    }
+    return fetch(gasUrl(payload), { method: "GET", keepalive: true });
+  }
+
+  /* ============ 5. META PIXEL — LEAD + INITIATE CHECKOUT ============ */
+  function firePixelLead() {
+    if (typeof fbq !== "function") return;
+    const eventId = "ebook_lead_" + storeGet("sessionStorage", "tfr_ebook_session_id");
+    fbq("track", "Lead", { content_name: EBOOK_CONFIG.EBOOK_NAME }, { eventID: eventId });
+  }
+  function firePixelInitiateCheckout() {
+    if (typeof fbq !== "function") return;
+    const eventId = "ebook_checkout_" + storeGet("sessionStorage", "tfr_ebook_session_id");
+    fbq("track", "InitiateCheckout", {
+      value: EBOOK_CONFIG.EBOOK_PRICE,
+      currency: "INR",
+      content_name: EBOOK_CONFIG.EBOOK_NAME
+    }, { eventID: eventId });
   }
 });
