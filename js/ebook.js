@@ -178,7 +178,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const el = form.querySelector(`[data-error-for="${fieldName}"]`);
     if (el) el.textContent = message || "";
   }
-  // Visual-only "opening payment page" screen (js/checkout-loading.js).
+  // Visual-only button countdown (js/checkout-loading.js).
   // Guarded so it can never throw into, or delay, the payment flow.
   function loadingScreen(on) {
     try {
@@ -516,7 +516,7 @@ document.addEventListener("DOMContentLoaded", () => {
         setStatus("Payment failed. Tap the button to try again — or use “Payment failed? — Pay here” to pay by UPI.", "#C0392B");
       });
       rzp.open();
-      loadingScreen(false); // Razorpay is open — remove the reassurance screen immediately
+      loadingScreen(false); // Razorpay is open — stop the button countdown immediately
       checkoutOpen = true;
       attempt.opened = true;
       saveAttempt(attempt);
