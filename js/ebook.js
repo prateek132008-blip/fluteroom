@@ -647,6 +647,27 @@ document.addEventListener("DOMContentLoaded", () => {
         qrEl.style.display = "none";
       }
     }
+    // "Works with all UPI apps": official logo if the image exists, else the name as text.
+    const appRow = document.getElementById("payAppRow");
+    if (appRow) {
+      (PR.APP_BADGES || []).forEach(b => {
+        const chip = document.createElement("span");
+        chip.className = "pr-app";
+        const text = document.createElement("span");
+        text.className = "pr-app-text";
+        text.textContent = b.name;
+        if (b.image) {
+          const img = document.createElement("img");
+          img.alt = b.name; img.loading = "lazy"; img.decoding = "async";
+          img.addEventListener("error", () => { img.remove(); chip.appendChild(text); });
+          img.src = b.image;
+          chip.appendChild(img);
+        } else {
+          chip.appendChild(text);
+        }
+        (b.top ? (document.getElementById("payAppTop") || appRow) : appRow).appendChild(chip);
+      });
+    }
     const num = document.getElementById("paySupportNumber");
     if (num) num.textContent = PR.SUPPORT_PHONE_DISPLAY || ("+" + WA_NUMBER);
     const call = document.getElementById("payCallLink");
