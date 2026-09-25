@@ -20,7 +20,7 @@
      auto-capture setting did not apply and payments could stay "authorized".
      The order is PRE-FETCHED in the background as soon as the customer
      starts filling the form, so checkout normally opens instantly. The wait
-     on submit is capped at 8 s; if Apps Script is slow/down, checkout still
+     on submit is capped at 6 s; if Apps Script is slow/down, checkout still
      opens (order-less fallback) — the server captures those payments later.
    - The same order + attempt ID is REUSED when the customer retries, so a
      failed-then-successful purchase is ONE sheet row, not a stale "Pending"
@@ -36,8 +36,14 @@
      carried in the Thank You page URL.
    - A missing/failed checkout.js no longer leaves the button stuck on
      "Preparing payment..." forever.
-   - The eBook link is no longer shipped to the browser — the Thank You page
-     receives it from the server only after the payment is verified.
+   - The eBook link is no longer shipped to the browser — it is emailed by
+     the server only after the payment is verified.
+   - PAYMENT-FAILED RECOVERY POPUP: when Razorpay reports a failed payment
+     (or the payment window can't load), a popup offers Retry Payment (same
+     order, no reload), Scan & Pay QR, Copy UPI ID, WhatsApp screenshot and
+     Call support. Closing the Razorpay window without a failed payment does
+     NOT show it. The "already paid?" safety check on retry now runs in
+     parallel instead of being awaited before checkout.
    ========================================================================== */
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -165,7 +171,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const SUCCESS_KEY = "tfr_ebook_success_payload";
   const ATTEMPT_KEY = "tfr_ebook_attempt";
   const ATTEMPT_MAX_AGE_MS = 24 * 60 * 60 * 1000;
-  const ORDER_WAIT_MS = 8000;
+  const ORDER_WAIT_MS = 6000; // hard cap; the order is normally pre-fetched while the form is filled
 
   function showError(fieldName, message) {
     const el = form.querySelector(`[data-error-for="${fieldName}"]`);
@@ -282,6 +288,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }, { once: true });
 
   let submitting = false;
+  let lastCheckout = null; // { data, attempt, meta } of the latest checkout — used by Retry
 
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
@@ -297,21 +304,27 @@ document.addEventListener("DOMContentLoaded", () => {
 
     submitting = true;
     try {
-      // ---- Advanced Matching (unchanged) ----
-      const { firstName, lastName } = splitName(data.fullName);
-      if (typeof fbq === "function") {
-        fbq("set", "userData", {
-          em: data.email,
-          ph: normalizePhoneForPixel(data.whatsapp),
-          fn: firstName,
-          ln: lastName,
-          external_id: (data.email || "").trim().toLowerCase()
-        });
-      }
+      // ---- Meta Pixel (Advanced Matching + Lead + InitiateCheckout).
+      // Wrapped so a broken/blocked Pixel can NEVER stop checkout opening. ----
+      try {
+        // ---- Advanced Matching (unchanged) ----
+        const { firstName, lastName } = splitName(data.fullName);
+        if (typeof fbq === "function") {
+          fbq("set", "userData", {
+            em: data.email,
+            ph: normalizePhoneForPixel(data.whatsapp),
+            fn: firstName,
+            ln: lastName,
+            external_id: (data.email || "").trim().toLowerCase()
+          });
+        }
 
-      // ---- Fire Lead + InitiateCheckout ONLY here, after the user submits the form ----
-      firePixelLead(data);
-      firePixelInitiateCheckout();
+        // ---- Fire Lead + InitiateCheckout ONLY here, after the user submits the form ----
+        firePixelLead(data);
+        firePixelInitiateCheckout();
+      } catch (pixelErr) {
+        console.warn("Meta Pixel error (ignored, checkout continues):", pixelErr);
+      }
 
       submitBtn.disabled = true;
       submitBtn.textContent = "Preparing payment...";
@@ -335,18 +348,11 @@ document.addEventListener("DOMContentLoaded", () => {
         attempt = currentAttempt;
       }
 
-      // ---- If this order was already opened before (a retry), make sure it
-      // wasn't actually paid already (e.g. UPI completed after the popup
-      // was closed). Prevents a customer paying twice. ----
-      if (attempt.rzpOrderId && attempt.opened) {
-        try {
-          const res = await gasCall({ action: "status", rzpOrderId: attempt.rzpOrderId }, 6000);
-          if (res && res.status === "paid") {
-            completePurchase({ paymentId: res.paymentId, rzpOrderId: attempt.rzpOrderId }, data, "recovered");
-            return;
-          }
-        } catch (err) { /* can't check — continue to checkout */ }
-      }
+      // (Retry safety: the "was this order already paid?" check now runs IN
+      // PARALLEL after checkout opens — see openRazorpayCheckout — instead of
+      // being awaited here, so it can never delay the payment window.
+      // Razorpay itself also refuses a second payment on an already-paid order.)
+      const isRetryOfOpenedOrder = !!(attempt.rzpOrderId && attempt.opened);
 
       attempt.customer = { fullName: data.fullName, email: data.email, whatsapp: data.whatsapp };
       saveAttempt(attempt);
@@ -366,10 +372,21 @@ document.addEventListener("DOMContentLoaded", () => {
       });
 
       openRazorpayCheckout(data, attempt, { fbp, fbc });
+
+      if (isRetryOfOpenedOrder) {
+        gasCall({ action: "status", rzpOrderId: attempt.rzpOrderId }, 10000)
+          .then(res => {
+            if (res && res.status === "paid") {
+              completePurchase({ paymentId: res.paymentId, rzpOrderId: attempt.rzpOrderId }, data, "recovered");
+            }
+          })
+          .catch(() => { /* can't check — checkout is already open, nothing to do */ });
+      }
     } catch (err) {
       console.error("Checkout could not start:", err);
       resetButton();
       setStatus("Something went wrong starting the payment. Please try again.", "#C0392B");
+      showRecovery("error");
     } finally {
       submitting = false;
     }
@@ -380,16 +397,46 @@ document.addEventListener("DOMContentLoaded", () => {
   let checkoutOpen = false;
   let completed = false;
 
+  let failedThisOpen = false;
+
+  // Loads Razorpay's checkout.js again if the <script> tag in the page failed
+  // (weak network / blocked). Resolves true/false, never hangs (8 s cap).
+  let rzpScriptPromise = null;
+  function loadRazorpayScript() {
+    if (typeof Razorpay === "function") return Promise.resolve(true);
+    if (rzpScriptPromise) return rzpScriptPromise;
+    rzpScriptPromise = new Promise(resolve => {
+      const t = setTimeout(() => resolve(typeof Razorpay === "function"), 8000);
+      const sc = document.createElement("script");
+      sc.src = "https://checkout.razorpay.com/v1/checkout.js";
+      sc.async = true;
+      sc.onload = () => { clearTimeout(t); resolve(typeof Razorpay === "function"); };
+      sc.onerror = () => { clearTimeout(t); resolve(false); };
+      document.head.appendChild(sc);
+    }).then(ok => { if (!ok) rzpScriptPromise = null; return ok; });
+    return rzpScriptPromise;
+  }
+
   function openRazorpayCheckout(data, attempt, meta) {
     const { fbp, fbc } = meta;
+    lastCheckout = { data, attempt, meta };
 
     // FIXED: if checkout.js failed to load (weak network / blocked), `new
     // Razorpay` threw and the button stayed on "Preparing payment..." forever.
+    // Now: try loading it once more; if that fails too, show the recovery
+    // popup (Retry / manual UPI) instead of a dead end.
     if (typeof Razorpay !== "function") {
-      resetButton();
-      setStatus("The payment window couldn't load. Please check your internet connection and try again.", "#C0392B");
+      submitBtn.textContent = "Loading payment window...";
+      loadRazorpayScript().then(ok => {
+        if (ok) { openRazorpayCheckout(data, attempt, meta); return; }
+        resetButton();
+        setStatus("The payment window couldn't load. Please check your internet connection and try again.", "#C0392B");
+        showRecovery("load");
+      });
       return;
     }
+    failedThisOpen = false;
+    const phoneDigits = String(data.whatsapp || "").replace(/\D/g, "").slice(-10);
 
     const options = {
       key: SITE_CONFIG.RAZORPAY_KEY_ID, // public key only
@@ -399,9 +446,10 @@ document.addEventListener("DOMContentLoaded", () => {
       description: EBOOK_CONFIG.EBOOK_NAME + " — eBook",
       image: SITE_CONFIG.BUSINESS_LOGO,
       prefill: {
-        name: data.fullName,
-        email: data.email,
-        contact: data.whatsapp
+        name: String(data.fullName || "").trim(),
+        email: String(data.email || "").trim(),
+        // normalised so Razorpay never rejects a "+91 98765 43210"-style entry
+        contact: phoneDigits.length === 10 ? "+91" + phoneDigits : String(data.whatsapp || "")
       },
       notes: {
         product: "ebook",
@@ -428,7 +476,13 @@ document.addEventListener("DOMContentLoaded", () => {
           checkoutOpen = false;
           if (completed) return;
           resetButton();
-          setStatus("Payment was not completed. You can try again anytime.");
+          if (failedThisOpen) {
+            // We closed Razorpay ourselves to show the recovery popup.
+            setStatus("Payment failed. You can retry or pay manually via UPI.", "#C0392B");
+          } else {
+            // Customer closed the window without a failed payment → NO popup.
+            setStatus("Payment was not completed. You can try again anytime.");
+          }
           // A UPI payment can still complete a little AFTER the popup is
           // closed (customer approved in the app, came back, closed the
           // "processing" screen). Keep checking quietly for a while.
@@ -441,11 +495,24 @@ document.addEventListener("DOMContentLoaded", () => {
     try {
       stopStatusPoll();
       rzp = new Razorpay(options);
-      rzp.on("payment.failed", function () {
-        // Razorpay keeps its popup open so the customer can retry in it; the
-        // SAME order is reused, so a later success lands on the same row.
+      rzp.on("payment.failed", function (resp) {
+        // Genuine failed payment attempt reported by Razorpay (declined,
+        // timed out, UPI app never answered, cancelled mid-payment, ...).
+        // Razorpay's window sits above everything on the page, so close it and
+        // show our recovery popup (Retry / QR / UPI ID / WhatsApp). The SAME
+        // order is reused on retry — no duplicate orders or sheet rows.
+        if (completed) return;
+        failedThisOpen = true;
+        const err = (resp && resp.error) || {};
+        console.warn("Razorpay payment failed:", err.code, err.reason, err.description);
         resetButton();
-        setStatus("Payment failed. Please try again or contact support.", "#C0392B");
+        setStatus("Payment failed. You can retry or pay manually via UPI.", "#C0392B");
+        try { if (rzp) rzp.close(); } catch (e) { /* ignore */ }
+        checkoutOpen = false;
+        showRecovery("failed");
+        // A UPI payment can still succeed late — keep checking in the
+        // background; if it does, the customer is taken to the Thank You page.
+        if (attempt.rzpOrderId) startStatusPoll(attempt, 5000, 120000);
       });
       rzp.open();
       checkoutOpen = true;
@@ -456,6 +523,7 @@ document.addEventListener("DOMContentLoaded", () => {
       checkoutOpen = false;
       resetButton();
       setStatus("The payment window couldn't open. Please try again.", "#C0392B");
+      showRecovery("load");
     }
   }
 
@@ -466,6 +534,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (completed || !info || !info.paymentId) return;
     completed = true;
     stopStatusPoll();
+    hideRecovery(false);
 
     if (via !== "handler") {
       setStatus("We found your completed payment — taking you to your eBook…", "#1F7A4D");
@@ -501,6 +570,154 @@ document.addEventListener("DOMContentLoaded", () => {
     const qs = "pid=" + encodeURIComponent(info.paymentId) +
       (attempt.attemptId ? "&oid=" + encodeURIComponent(attempt.attemptId) : "");
     window.location.replace("ebook-success.html?" + qs);
+  }
+
+  /* ============ 2b. PAYMENT-FAILED RECOVERY POPUP (new) ============
+     Opens ONLY on: Razorpay "payment.failed", or the payment window failing
+     to load/open. Never on a plain close of the Razorpay window.
+     Offers: Retry (same order, no reload) · Scan QR · Copy UPI ID ·
+     WhatsApp screenshot · Call. Manual UPI payments are verified by a human,
+     so nothing here marks an order paid or fires the Purchase pixel. */
+  const recoveryEl = document.getElementById("payRecovery");
+  const reopenBtn = document.getElementById("payRecoveryReopen");
+  const WA_NUMBER = String(SITE_CONFIG.WHATSAPP_NUMBER || "").replace(/\D/g, "");
+  let lastFocus = null;
+
+  function waLink(text) {
+    return "https://wa.me/" + WA_NUMBER + "?text=" + encodeURIComponent(text);
+  }
+
+  function manualPaymentMessage() {
+    const d = (lastCheckout && lastCheckout.data) || {};
+    const a = (lastCheckout && lastCheckout.attempt) || currentAttempt || {};
+    const lines = [
+      `Hi, I have completed the payment manually for "${EBOOK_CONFIG.EBOOK_NAME}" (₹${EBOOK_CONFIG.EBOOK_PRICE}). I am sending my payment screenshot. Please verify my payment and provide my eBook access.`,
+      ""
+    ];
+    if (d.fullName) lines.push("Name: " + d.fullName);
+    if (d.email) lines.push("Email: " + d.email);
+    if (d.whatsapp) lines.push("WhatsApp: " + d.whatsapp);
+    if (a.attemptId) lines.push("Order ref: " + a.attemptId);
+    return lines.join("\n");
+  }
+
+  function setupRecoveryStatic() {
+    if (!recoveryEl) return;
+    const upiId = String(EBOOK_CONFIG.MANUAL_UPI_ID || "").trim();
+    const qr = String(EBOOK_CONFIG.MANUAL_UPI_QR_IMAGE || "").trim();
+    const upiEl = document.getElementById("payUpiId");
+    const qrEl = document.getElementById("payQrImg");
+    if (upiEl) upiEl.textContent = upiId;
+    if (qrEl) {
+      if (qr) {
+        qrEl.src = qr;
+        qrEl.alt = "UPI QR code to pay " + (SITE_CONFIG.BUSINESS_NAME || "") + (upiId ? " (" + upiId + ")" : "");
+      }
+      // If the image file is missing, hide it rather than show a broken icon.
+      qrEl.addEventListener("error", () => { qrEl.style.display = "none"; });
+    }
+    const num = document.getElementById("paySupportNumber");
+    if (num) num.textContent = EBOOK_CONFIG.SUPPORT_PHONE_DISPLAY || ("+" + WA_NUMBER);
+    const call = document.getElementById("payCallLink");
+    if (call) call.href = "tel:+" + WA_NUMBER;
+    const sup = document.getElementById("paySupportWhatsapp");
+    if (sup) sup.href = waLink(`Hi, I'm having trouble paying for "${EBOOK_CONFIG.EBOOK_NAME}". Can you help?`);
+  }
+
+  function showRecovery(kind) {
+    if (!recoveryEl || completed) return;
+    const title = document.getElementById("payRecoveryTitle");
+    const lede = document.getElementById("payRecoveryLede");
+    if (kind === "load" || kind === "error") {
+      title.textContent = "Payment window couldn't open";
+      lede.textContent = "This is usually a slow or unstable connection. You can retry, or pay manually using UPI.";
+    } else {
+      title.textContent = "Payment Failed";
+      lede.textContent = "Your payment could not be completed using the selected payment method. Don't worry — you can try again, or pay manually using UPI.";
+    }
+    // Refresh the WhatsApp message with this customer's details.
+    const wa = document.getElementById("payWhatsappBtn");
+    if (wa) wa.href = waLink(manualPaymentMessage());
+    const copied = document.getElementById("payCopied");
+    if (copied) copied.textContent = "";
+
+    lastFocus = document.activeElement;
+    recoveryEl.classList.add("open");
+    recoveryEl.setAttribute("aria-hidden", "false");
+    document.body.style.overflow = "hidden";
+    const retry = document.getElementById("payRetryBtn");
+    if (retry) setTimeout(() => { try { retry.focus({ preventScroll: true }); } catch (e) { retry.focus(); } }, 50);
+    if (reopenBtn) reopenBtn.hidden = false;
+  }
+
+  function hideRecovery(restoreFocus) {
+    if (!recoveryEl || !recoveryEl.classList.contains("open")) return;
+    recoveryEl.classList.remove("open");
+    recoveryEl.setAttribute("aria-hidden", "true");
+    document.body.style.overflow = "";
+    if (restoreFocus !== false && lastFocus && lastFocus.focus) { try { lastFocus.focus(); } catch (e) {} }
+  }
+
+  function retryPayment() {
+    hideRecovery(false);
+    if (submitting || checkoutOpen || completed) return;
+    // Re-run the normal submit path: same attempt + same Razorpay order,
+    // validation, one checkout instance — no page reload, no new order.
+    if (typeof form.requestSubmit === "function") form.requestSubmit();
+    else form.dispatchEvent(new Event("submit", { cancelable: true }));
+  }
+
+  function legacyCopy(text) {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.setAttribute("readonly", "");
+    ta.style.cssText = "position:fixed;top:0;left:0;width:1px;height:1px;opacity:0;";
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    try { ta.setSelectionRange(0, text.length); } catch (e) {}
+    let ok = false;
+    try { ok = document.execCommand("copy"); } catch (e) { ok = false; }
+    document.body.removeChild(ta);
+    return ok;
+  }
+
+  function copyUpiId() {
+    const id = String(EBOOK_CONFIG.MANUAL_UPI_ID || "").trim();
+    const out = document.getElementById("payCopied");
+    const done = ok => {
+      if (!out) return;
+      if (ok) {
+        out.style.color = "#1F7A4D";
+        out.textContent = "✓ UPI ID copied!";
+      } else {
+        // Last resort: select the text so a long-press "Copy" works.
+        out.style.color = "var(--ink-soft)";
+        out.textContent = "Couldn't copy automatically — press and hold the UPI ID to copy it.";
+        const el = document.getElementById("payUpiId");
+        try { const r = document.createRange(); r.selectNodeContents(el); const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r); } catch (e) {}
+      }
+      clearTimeout(copyUpiId._t);
+      copyUpiId._t = setTimeout(() => { if (out) out.textContent = ""; }, 3500);
+    };
+    if (!id) return done(false);
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(id).then(() => done(true), () => done(legacyCopy(id)));
+    } else {
+      done(legacyCopy(id));
+    }
+  }
+
+  if (recoveryEl) {
+    setupRecoveryStatic();
+    document.getElementById("payRecoveryClose").addEventListener("click", () => hideRecovery());
+    document.getElementById("payRetryBtn").addEventListener("click", retryPayment);
+    document.getElementById("payCopyBtn").addEventListener("click", copyUpiId);
+    recoveryEl.addEventListener("click", (e) => { if (e.target === recoveryEl) hideRecovery(); });
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && recoveryEl.classList.contains("open")) hideRecovery();
+    });
+    if (reopenBtn) reopenBtn.addEventListener("click", () => showRecovery("failed"));
   }
 
   /* ============ 3. PAYMENT RECOVERY ============ */
