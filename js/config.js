@@ -67,8 +67,9 @@ const SITE_CONFIG = {
    anything shared with the rest of the site (Razorpay key, WhatsApp number,
    Meta Pixel ID, business name/logo) — nothing is duplicated.
 
-   The SAME EBOOK_DRIVE_LINK value below is used on BOTH the thank-you page
-   AND the confirmation email, so you only ever update it in one place.
+   The eBook download link is NOT stored here any more — it is kept
+   server-side in the eBook Apps Script (Script Property EBOOK_DRIVE_LINK)
+   and used for BOTH the thank-you page and the confirmation email.
    ========================================================================== */
 const EBOOK_CONFIG = {
 
@@ -77,10 +78,12 @@ const EBOOK_CONFIG = {
   EBOOK_ACCESS: "Lifetime Access",
   EBOOK_COVER_IMAGE: "assets/alankaars-ebook-cover.png",
 
-  // NEEDS CONFIGURATION — paste the Google Drive link to the eBook PDF here
-  // once it's uploaded and sharing is set to "Anyone with the link can view".
-  // Used on the thank-you page AND inside the confirmation email.
-  EBOOK_DRIVE_LINK: "https://drive.google.com/file/d/11_69eaNvOBHnrFE7ezHXvUDCyl_bcqS_/view?usp=sharing",
+  // REMOVED FROM THE FRONT END (security fix): the eBook's Drive link used to
+  // live here, which meant anyone could read it from this public file and get
+  // the eBook without paying. It now lives ONLY in the eBook Apps Script's
+  // Script Properties as EBOOK_DRIVE_LINK, and is handed out only after the
+  // server has verified the payment with Razorpay. Do NOT put it back here.
+  EBOOK_DRIVE_LINK: "",
 
   // NEEDS CONFIGURATION — the separate Google Apps Script Web App URL for the
   // eBook (deployed from google-apps-script/Ebook_Code.gs — see its setup
