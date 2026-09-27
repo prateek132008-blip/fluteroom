@@ -210,6 +210,34 @@ document.addEventListener("DOMContentLoaded", () => {
     // Meta's documented fbc format: fb.{subdomainIndex}.{creationTime}.{fbclid}
     return `fb.1.${Date.now()}.${fbclid}`;
   }
+  /* ---- Buyer IP for the server-side (Conversions API) Purchase ----
+     Meta flagged: server events send client_user_agent but no
+     client_ip_address. Apps Script cannot see the buyer's IP, so the browser
+     looks it up once in the background (IPv6 preferred, as Meta recommends)
+     and it travels with the payment (Razorpay notes) + the Pending sheet row.
+     NEVER awaited: if the lookup is slow/blocked, the value is just empty and
+     checkout/payment behave exactly as before. */
+  let clientIp = storeGet("sessionStorage", "tfr_client_ip") || "";
+  function isValidIp(ip) {
+    return typeof ip === "string" && ip.length <= 45 &&
+      (/^\d{1,3}(\.\d{1,3}){3}$/.test(ip) || /^[0-9a-fA-F:]+$/.test(ip) && ip.indexOf(":") !== -1);
+  }
+  (function fetchClientIp() {
+    if (clientIp) return;
+    try {
+      const controller = typeof AbortController === "function" ? new AbortController() : null;
+      const timer = setTimeout(() => { if (controller) controller.abort(); }, 5000);
+      fetch("https://api64.ipify.org?format=json", { cache: "no-store", signal: controller ? controller.signal : undefined })
+        .then(r => r.json())
+        .then(j => {
+          const ip = j && String(j.ip || "").trim();
+          if (isValidIp(ip)) { clientIp = ip; storeSet("sessionStorage", "tfr_client_ip", ip); }
+        })
+        .catch(() => { /* ignore — IP is optional */ })
+        .finally(() => clearTimeout(timer));
+    } catch (e) { /* ignore — IP is optional */ }
+  })();
+
   function splitName(fullName) {
     const parts = (fullName || "").trim().split(/\s+/);
     return { firstName: parts[0] || "", lastName: parts.slice(1).join(" ") || "" };
@@ -348,6 +376,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const fbp = getCookie("_fbp");
       const fbc = getFbc();
       const userAgent = navigator.userAgent;
+      const ip = clientIp; // already fetched in the background; "" if unavailable
 
       // ---- Get the Razorpay order (usually already pre-fetched). Capped wait:
       // if Apps Script is slow or down, open an order-less checkout rather
@@ -381,12 +410,12 @@ document.addEventListener("DOMContentLoaded", () => {
         product: "ebook",
         productName: EBOOK_CONFIG.EBOOK_NAME,
         amount: EBOOK_CONFIG.EBOOK_PRICE,
-        fbp, fbc, userAgent
+        fbp, fbc, userAgent, clientIp: ip
       }).catch(err => {
         console.error("Ebook Apps Script pre-payment save failed (continuing to checkout anyway):", err);
       });
 
-      openRazorpayCheckout(data, attempt, { fbp, fbc });
+      openRazorpayCheckout(data, attempt, { fbp, fbc, ip });
 
       if (isRetryOfOpenedOrder) {
         gasCall({ action: "status", rzpOrderId: attempt.rzpOrderId }, 10000)
@@ -432,7 +461,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function openRazorpayCheckout(data, attempt, meta) {
-    const { fbp, fbc } = meta;
+    const { fbp, fbc, ip } = meta;
     lastCheckout = { data, attempt, meta };
 
     // FIXED: if checkout.js failed to load (weak network / blocked), `new
@@ -472,7 +501,9 @@ document.addEventListener("DOMContentLoaded", () => {
         customer_name: String(data.fullName || "").slice(0, 100),
         // Razorpay notes values are limited to 256 characters
         fbp: String(fbp || "").slice(0, 250),
-        fbc: String(fbc || "").slice(0, 250)
+        fbc: String(fbc || "").slice(0, 250),
+        // buyer IP for the server-side CAPI Purchase (client_ip_address)
+        client_ip: String(ip || "").slice(0, 45)
         // ebook_link REMOVED: the link now lives only on the server.
       },
       theme: { color: "#FF7A00" },
