@@ -2,6 +2,21 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<!-- ============ PRODUCTION DOMAIN GUARD ============
+     Payments must originate from https://fluteroom.online (the domain registered
+     with Razorpay). If this page is ever opened from another host (e.g. an old
+     copy uploaded at isrt.net.in/fluteroom-main/), send the visitor to the same
+     page on fluteroom.online, keeping ?utm/fbclid query + #hash. Runs before
+     Meta Pixel and Razorpay load. localhost / file:// are allowed for testing. -->
+<script>
+(function () {
+  var h = location.hostname;
+  var ok = ["fluteroom.online", "www.fluteroom.online", "localhost", "127.0.0.1", ""];
+  if (ok.indexOf(h) === -1) {
+    location.replace("https://fluteroom.online/alankaars-ebook.html" + location.search + location.hash);
+  }
+})();
+</script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>30 Alankaras for Flute — eBook (₹399, Lifetime Access) | The Flute Room</title>
 <meta name="description" content="A structured 30-alankara eBook for flute learners — build ear training, swar identification, and finger speed. ₹399, instant digital access, lifetime.">
@@ -11,7 +26,8 @@
 <meta property="og:description" content="Structured alankara exercises to build ear training, swar identification and finger speed on the flute. ₹399 · Lifetime Access.">
 <meta property="og:type" content="product">
 <meta name="theme-color" content="#FF7A00">
-<link rel="canonical" href="https://www.example.com/alankaars-ebook.html">
+<link rel="canonical" href="https://fluteroom.online/alankaars-ebook.html">
+<meta property="og:url" content="https://fluteroom.online/alankaars-ebook.html">
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="css/style.css">
