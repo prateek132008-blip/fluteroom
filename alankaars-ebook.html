@@ -331,6 +331,26 @@ fbq('track', 'PageView');
     .pay-recovery { padding: 22px 16px 18px; }
     .pr-upi-id { font-size: 15px; }
   }
+
+  /* ---- Purchase-button notes animation (same as the 30 Raag site) ----
+     Small sargam syllables, notes and instruments rise from behind the
+     "Get the eBook" buttons and fade out. Decorative only — button colours
+     are unchanged. Driven by the small script at the end of this page. */
+  .cta-wrap { position: relative; display: inline-flex; isolation: isolate; max-width: 100%; }
+  .cta-wrap.cta-block { display: flex; width: 100%; }
+  .cta-wrap > .btn { position: relative; z-index: 1; }
+  .cta-notes { position: absolute; inset: 0; z-index: 0; pointer-events: none; }
+  .cta-note {
+    position: absolute; bottom: 30%; font-size: 17px; line-height: 1; color: var(--orange-deep);
+    opacity: 0; will-change: transform, opacity; animation: cta-rise 3s ease-out forwards;
+  }
+  .cta-note.hi { font-weight: 700; font-size: 16px; }
+  @keyframes cta-rise {
+    0%   { transform: translate(0, 0) rotate(0) scale(0.7); opacity: 0; }
+    15%  { opacity: 0.95; }
+    70%  { opacity: 0.55; }
+    100% { transform: translate(var(--dx, 0), -70px) rotate(var(--rot, 0)) scale(1); opacity: 0; }
+  }
 </style>
 </head>
 <body>
@@ -387,12 +407,12 @@ fbq('track', 'PageView');
         </div>
         <span class="ebook-countdown" id="ebookCountdown">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>
-          Offer ends in <span class="ebook-countdown-time" id="ebookCountdownTime">24:00:00</span>
+          Offer ends in <span class="ebook-countdown-time" id="ebookCountdownTime">01:00:00</span>
         </span>
       </div>
 
       <div class="hero-actions">
-        <a href="#buy" class="btn btn-primary">Get the eBook — <span data-ebook-price>₹399</span></a>
+        <span class="cta-wrap"><a href="#buy" class="btn btn-primary">Get the eBook — <span data-ebook-price>₹399</span></a></span>
         <a href="#ebook-preview" class="btn btn-outline">See What's Inside</a>
       </div>
 
@@ -630,7 +650,7 @@ fbq('track', 'PageView');
           <span class="form-error" data-error-for="whatsapp"></span>
         </div>
 
-        <button type="submit" class="btn btn-primary btn-block" id="ebookSubmitBtn" style="margin-top:18px;">Get the eBook — <span data-ebook-price>₹399</span></button>
+        <span class="cta-wrap cta-block" style="margin-top:18px;"><button type="submit" class="btn btn-primary btn-block" id="ebookSubmitBtn">Get the eBook — <span data-ebook-price>₹399</span></button></span>
         <div class="form-status" id="ebookFormStatus"></div>
         <p style="font-size:12px;color:var(--ink-soft);text-align:center;margin-top:14px;">
           By purchasing you agree to our <a href="policies/terms.html" style="text-decoration:underline;">Terms</a> and <a href="policies/refund.html" style="text-decoration:underline;">Refund Policy</a>.
@@ -783,6 +803,40 @@ fbq('track', 'PageView');
 <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
 <script src="js/checkout-loading.js" defer></script>
 <script src="js/ebook.js" defer></script>
+<script>
+/* Purchase-button notes animation (same as the 30 Raag site). Self-contained:
+   touches nothing else on the page, pauses while the button is busy/disabled or
+   off-screen, and is switched off for visitors who prefer reduced motion. */
+(function () {
+  function start() {
+    if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    var GLYPHS = ["सा", "रे", "ग", "म", "प", "ध", "नि", "♪", "♫", "🪈", "🎹", "🪕", "🎸", "🥁"];
+    document.querySelectorAll(".cta-wrap").forEach(function (wrap, wi) {
+      var layer = document.createElement("span");
+      layer.className = "cta-notes"; layer.setAttribute("aria-hidden", "true");
+      wrap.insertBefore(layer, wrap.firstChild);
+      var button = wrap.querySelector(".btn");
+      var i = wi * 3;
+      setInterval(function () {
+        if (document.hidden || (button && button.disabled)) return;
+        var r = wrap.getBoundingClientRect();
+        if (r.bottom < 0 || r.top > window.innerHeight) return;
+        var g = GLYPHS[i++ % GLYPHS.length];
+        var n = document.createElement("span");
+        n.className = "cta-note" + (/[\u0900-\u097F]/.test(g) ? " hi" : "");
+        n.textContent = g;
+        n.style.left = (10 + Math.random() * 72) + "%";
+        n.style.setProperty("--dx", (Math.random() * 28 - 14).toFixed(0) + "px");
+        n.style.setProperty("--rot", (Math.random() * 30 - 15).toFixed(0) + "deg");
+        n.style.animationDuration = (2.6 + Math.random() * 1.2).toFixed(2) + "s";
+        layer.appendChild(n);
+        setTimeout(function () { n.remove(); }, 4200);
+      }, 650);
+    });
+  }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start); else start();
+})();
+</script>
 
 <!-- ============ OFFER COUNTDOWN TIMER ============
      Fully self-contained — does not touch config.js, ebook.js, the form,
@@ -790,19 +844,20 @@ fbq('track', 'PageView');
      collide with the eBook success-page keys (tfr_ebook_success_payload,
      tfr_ebook_purchase_fired_*).
 
-     Behavior: on first visit, sets a 24-hour target end time and stores it.
+     Behavior: on first visit, sets a 1-hour target end time and stores it.
      On every later visit/refresh, reads that same stored end time, so the
-     countdown keeps going down correctly instead of resetting to 24:00:00.
-     Once it hits 00:00:00, it automatically starts a fresh 24-hour countdown
+     countdown keeps going down correctly instead of resetting to 01:00:00.
+     Once it hits 00:00:00, it automatically starts a fresh 1-hour countdown
      and repeats indefinitely. -->
 <script>
 (function () {
   var STORAGE_KEY = "tfr_ebook_offer_end";
-  var DURATION_MS = 24 * 60 * 60 * 1000;
+  var DURATION_MS = 60 * 60 * 1000; // 1-hour loop
 
   function getEndTime() {
     var stored = parseInt(localStorage.getItem(STORAGE_KEY), 10);
-    if (!stored || isNaN(stored) || stored <= Date.now()) {
+    // also resets an old 24-hour end time saved in the visitor's browser
+    if (!stored || isNaN(stored) || stored <= Date.now() || stored - Date.now() > DURATION_MS) {
       stored = Date.now() + DURATION_MS;
       localStorage.setItem(STORAGE_KEY, String(stored));
     }
