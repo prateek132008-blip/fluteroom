@@ -178,10 +178,32 @@ document.addEventListener("DOMContentLoaded", () => {
     window.open(`https://wa.me/${SITE_CONFIG.WHATSAPP_NUMBER}?text=${msg}`, "_blank");
   });
 
-  /* ============ META PIXEL — PURCHASE (once per verified payment) ============ */
+  /* ============ META PIXEL — PURCHASE (once per verified payment) ============
+     Fires ONLY after the server has confirmed the payment with Razorpay
+     ("paid"), with eventID = "ebook_purchase_<payment id>" — the SAME event_id
+     the Apps Script sends to the Conversions API, so Meta merges the two.
+     "Already fired" is remembered in localStorage, sessionStorage AND a cookie
+     (localStorage alone throws / is wiped in some Instagram & Facebook in-app
+     browsers, which let a refresh fire it again), plus an in-page flag. */
+  let purchaseFiredThisPage = false;
+  function getCookieVal(name) {
+    try {
+      const m = document.cookie.match(new RegExp("(?:^|; )" + name + "=([^;]*)"));
+      return m ? m[1] : "";
+    } catch (e) { return ""; }
+  }
+  function purchaseAlreadyFired(key) {
+    return purchaseFiredThisPage || !!storeGet("localStorage", key) || !!storeGet("sessionStorage", key) || getCookieVal(key) === "1";
+  }
+  function markPurchaseFired(key) {
+    purchaseFiredThisPage = true;
+    storeSet("localStorage", key, "1");
+    storeSet("sessionStorage", key, "1");
+    try { document.cookie = key + "=1; max-age=" + (60 * 60 * 24 * 180) + "; path=/; SameSite=Lax"; } catch (e) {}
+  }
   function firePurchasePixel(amount) {
     const firedKey = "tfr_ebook_purchase_fired_" + data.paymentId;
-    if (storeGet("localStorage", firedKey) || typeof fbq !== "function") return;
+    if (purchaseAlreadyFired(firedKey) || typeof fbq !== "function") return;
     const nameParts = (data.fullName || "").trim().split(/\s+/);
     const rawWhatsapp = (data.whatsapp || "").replace(/\D/g, "");
     const normalizedPhone = rawWhatsapp.length === 10 ? "91" + rawWhatsapp : rawWhatsapp;
@@ -201,7 +223,7 @@ document.addEventListener("DOMContentLoaded", () => {
       content_name: data.productName || "30 Alankaras for Flute",
       content_type: "product"
     }, { eventID: "ebook_purchase_" + data.paymentId });
-    storeSet("localStorage", firedKey, "1");
+    markPurchaseFired(firedKey);
   }
 
   /* ============ SILENT BACKGROUND CHECK ============
