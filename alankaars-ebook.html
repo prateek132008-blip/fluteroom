@@ -18,12 +18,12 @@
 })();
 </script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>30 Alankaras for Flute — eBook (₹399, Lifetime Access) | The Flute Room</title>
-<meta name="description" content="A structured 30-alankara eBook for flute learners — build ear training, swar identification, and finger speed. ₹399, instant digital access, lifetime.">
+<title>30 Alankaars for Bansuri — eBook (₹399, Lifetime Access) | The Flute Room</title>
+<meta name="description" content="30 structured Alankaars (Aaroh + Avroh) for bansuri, with a finger chart and notes &amp; octaves guide. Train your ear and fingers to find notes yourself. ₹399, instant email delivery, lifetime access.">
 
-<!-- ============ SEO / Open Graph (new — only for this page) ============ -->
-<meta property="og:title" content="30 Alankaras for Flute — eBook | The Flute Room">
-<meta property="og:description" content="Structured alankara exercises to build ear training, swar identification and finger speed on the flute. ₹399 · Lifetime Access.">
+<!-- ============ SEO / Open Graph ============ -->
+<meta property="og:title" content="30 Alankaars for Bansuri — eBook | The Flute Room">
+<meta property="og:description" content="Stop depending on a tutorial for every song. 30 structured Alankaars to train your ear and fingers. ₹399 · Lifetime Access.">
 <meta property="og:type" content="product">
 <meta name="theme-color" content="#FF7A00">
 <link rel="canonical" href="https://fluteroom.online/alankaars-ebook.html">
@@ -31,15 +31,27 @@
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="css/style.css">
+<link rel="preload" as="image" href="assets/alankaars-ebook-cover.png">
 
 <!-- ============ CONFIG ============ -->
 <script src="js/config.js" defer></script>
 
 <!-- ============ META PIXEL BASE CODE ============
-     Reuses the SAME Pixel ID as every other page on the site.
-     Only base pixel + PageView here. Lead / InitiateCheckout fire from
-     js/ebook.js at the correct moments; Purchase fires once on ebook-success.html. -->
+     Same Pixel ID as every other page. Only base pixel + PageView here.
+     Lead / InitiateCheckout fire from js/ebook.js when the form is submitted;
+     Purchase fires once on ebook-success.html (unchanged).
+     PRODUCTION-ONLY: the real Pixel loads ONLY on fluteroom.online. On
+     localhost / 127.0.0.1 / file:// / any other host a harmless stub replaces
+     fbq, so every fbq(...) call still works but only logs to the console. -->
 <script>
+(function () {
+  var PIXEL_HOSTS = ["fluteroom.online", "www.fluteroom.online"];
+  if (PIXEL_HOSTS.indexOf(location.hostname) === -1) {
+    window.fbq = function () {
+      try { console.info("[Meta Pixel disabled on '" + location.hostname + "']", Array.prototype.slice.call(arguments)); } catch (e) {}
+    };
+    return;
+  }
 !function(f,b,e,v,n,t,s)
 {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
 n.callMethod.apply(n,arguments):n.queue.push(arguments)};
@@ -50,132 +62,89 @@ s.parentNode.insertBefore(t,s)}(window, document,'script',
 'https://connect.facebook.net/en_US/fbevents.js');
 fbq('init', '27629504953321020');
 fbq('track', 'PageView');
+})();
 </script>
 <noscript><img height="1" width="1" style="display:none" src="https://www.facebook.com/tr?id=27629504953321020&ev=PageView&noscript=1" /></noscript>
 
-<!-- ============ PAGE-SCOPED STYLES (same pattern as policies/*.html) ============
-     Reuses every existing CSS variable, font, radius, shadow and button class.
-     Only adds the handful of rules unique to a book-style product page. -->
+<!-- ============ PAGE-SCOPED STYLES ============
+     Reuses every CSS variable, font, button and form class from css/style.css.
+     Layout goal: price, proof and a clear "what's inside" are visible in the
+     first screen on a phone, and a sticky buy bar is always one tap away. -->
 <style>
-  .ebook-hero { padding: 150px 0 90px; overflow: hidden; }
-  .ebook-hero .container { display: grid; grid-template-columns: 0.85fr 1.15fr; gap: 56px; align-items: center; }
-  .ebook-hero-copy .eyebrow { margin-bottom: 16px; }
-  .ebook-hero-copy h1 { font-size: clamp(30px, 4vw, 46px); margin-bottom: 16px; }
-  .ebook-hero-copy p.lede { font-size: 17px; color: var(--ink-soft); max-width: 480px; margin-bottom: 26px; }
-  /* ---- Price / offer block (redesigned for clearer hierarchy) ----
-     ₹399 is the dominant element; the strike-through original price and
-     "You Save" badge sit clearly below it, subtle by comparison; the
-     countdown sits on its own line, small and muted, so it creates urgency
-     without competing with the price for attention. Values, price logic,
-     and countdown behavior are unchanged — this only restructures the
-     visual weighting. */
-  .ebook-price-block { margin-bottom: 26px; }
-  .ebook-price-main { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
-  .ebook-price { font-family: var(--font-display); font-size: clamp(36px, 6vw, 46px); font-weight: 800; color: var(--ink); line-height: 1; }
-  .ebook-price-original { font-size: 16px; font-weight: 600; color: var(--ink-soft); text-decoration: line-through; opacity: 0.7; }
-  .ebook-price-sub { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
-  .ebook-save-badge {
-    display: inline-flex; align-items: center;
-    background: var(--orange-wash); color: var(--orange-deep);
-    font-size: 12.5px; font-weight: 700;
-    padding: 6px 12px; border-radius: 100px;
-  }
-  .ebook-checkout-price-original { font-size: 13px; font-weight: 600; color: var(--ink-soft); text-decoration: line-through; margin-right: 6px; }
-  .ebook-access-pill {
-    display: inline-flex; align-items: center; gap: 6px;
-    background: var(--orange-wash); color: var(--orange-deep);
-    font-size: 12.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;
-    padding: 7px 14px; border-radius: 100px;
-  }
-  /* ---- Offer countdown — intentionally quiet: small, muted label text with
-     only the digits picking up the accent color, so it reads as a subtle
-     nudge rather than a second competing "price". ---- */
-  .ebook-countdown {
-    display: inline-flex; align-items: center; gap: 6px;
-    font-size: 12.5px; font-weight: 600; color: var(--ink-soft);
-    margin-top: 12px;
-  }
-  .ebook-countdown svg { color: var(--orange); flex-shrink: 0; }
-  .ebook-countdown-time { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--orange-deep); }
-  @media (max-width: 430px) {
-    .ebook-countdown { font-size: 12px; }
-  }
-  .ebook-trust { display: flex; gap: 18px; flex-wrap: wrap; font-size: 13.5px; color: var(--ink-soft); margin-top: 22px; }
-  .ebook-trust span { display: flex; align-items: center; gap: 7px; }
-  .ebook-trust svg { color: var(--orange); flex-shrink: 0; }
+  section.lp { padding: 84px 0; }
+  @media (max-width: 760px) { section.lp { padding: 60px 0; } }
+  .lp .section-head { margin-bottom: 40px; }
 
-  /* ---- Book showcase (transparent cover PNG — continuously floats above a
-     grounded contact shadow that breathes in sync, like the box is hovering
-     just above a surface, plus a faint ambient glow for depth) ---- */
-  .ebook-showcase { display: flex; justify-content: center; align-items: center; position: relative; padding: 20px 20px 40px; }
-  .ebook-showcase::before {
-    content: "";
-    position: absolute; inset: 6% 12% 14%;
-    background: radial-gradient(closest-side, rgba(255,122,0,0.18), transparent 72%);
-    filter: blur(30px);
-    z-index: 0;
+  /* ---------- HERO ---------- */
+  .lp-hero { padding: 128px 0 64px; overflow: hidden; background: linear-gradient(180deg, var(--cream) 0%, var(--white) 100%); }
+  .lp-hero .container { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 48px; align-items: center; }
+  .lp-hero h1 { font-size: clamp(30px, 4.4vw, 50px); margin-bottom: 16px; }
+  .lp-hero h1 em { font-style: normal; color: var(--orange-deep); }
+  .lp-lede { font-size: 17px; color: var(--ink-soft); max-width: 520px; margin-bottom: 22px; }
+  .lp-offer {
+    display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+    background: var(--white); border: 1.5px solid var(--line); border-radius: var(--radius);
+    padding: 14px 18px; margin-bottom: 20px; max-width: 520px; box-shadow: var(--shadow-soft);
   }
-  .ebook-cover-frame {
-    position: relative; z-index: 2;
-    max-width: 380px; width: 100%;
-    animation: ebook-float 4.5s ease-in-out infinite;
+  .lp-price { font-family: var(--font-display); font-size: 40px; font-weight: 700; line-height: 1; color: var(--ink); }
+  .lp-offer-facts { display: flex; flex-direction: column; gap: 2px; font-size: 13.5px; color: var(--ink-soft); }
+  .lp-offer-facts strong { color: var(--ink); }
+  .lp-hero .hero-actions { margin-bottom: 18px; }
+  .lp-proof { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 13.5px; color: var(--ink-soft); }
+  .lp-proof .dot { width: 8px; height: 8px; border-radius: 50%; background: #1F9D55; box-shadow: 0 0 0 4px rgba(31,157,85,0.15); }
+  .lp-pay { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 14px; font-size: 12.5px; color: var(--ink-soft); }
+  .lp-pay img { height: 22px; width: auto; }
+
+  .lp-cover { position: relative; display: flex; justify-content: center; }
+  .lp-cover::before {
+    content: ""; position: absolute; inset: 8% 10% 12%;
+    background: radial-gradient(closest-side, rgba(255,122,0,0.20), transparent 72%); filter: blur(30px);
   }
-  .ebook-cover-frame img {
-    width: 100%; display: block;
+  .lp-cover img {
+    position: relative; width: 100%; max-width: 360px; height: auto;
     filter: drop-shadow(0 22px 18px rgba(17,17,17,0.25)) drop-shadow(0 6px 8px rgba(17,17,17,0.18));
+    animation: lp-float 4.5s ease-in-out infinite;
   }
-  /* ---- Ground contact shadow — a separate, anchored ellipse (does NOT float
-     with the box) that breathes wider/darker as the box dips closer to it ---- */
-  .ebook-ground-shadow {
-    position: absolute; z-index: 1;
-    left: 50%; bottom: 26px;
-    transform: translateX(-50%);
-    width: 46%; height: 20px;
-    background: radial-gradient(closest-side, rgba(17,17,17,0.32), transparent 75%);
-    filter: blur(7px);
-    border-radius: 50%;
-    animation: ebook-shadow-breathe 4.5s ease-in-out infinite;
-  }
-  @keyframes ebook-float {
-    0%, 100% { transform: translateY(0); }
-    50% { transform: translateY(-16px); }
-  }
-  @keyframes ebook-shadow-breathe {
-    0%, 100% { width: 46%; opacity: 0.9; }
-    50% { width: 36%; opacity: 0.5; }
-  }
-
-  /* ---- Benefits grid (reuses .benefit-card styling, custom column count) ---- */
-  .ebook-benefit-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
-  @media (max-width: 980px) { .ebook-benefit-grid { grid-template-columns: repeat(2, 1fr); } }
-  @media (max-width: 640px) { .ebook-benefit-grid { grid-template-columns: 1fr; } }
-
-  /* ---- Product info list ---- */
-  .ebook-info-card {
-    background: var(--white); border: 1.5px solid var(--line); border-radius: var(--radius-lg);
-    box-shadow: var(--shadow-soft); padding: 40px; max-width: 640px; margin: 0 auto;
-  }
-  .ebook-info-list { list-style: none; display: flex; flex-direction: column; gap: 14px; }
-  .ebook-info-list li { display: flex; align-items: flex-start; gap: 10px; font-size: 15px; color: var(--ink-soft); }
-  .ebook-info-list li strong { color: var(--ink); }
-  .ebook-info-list li svg { color: var(--orange); flex-shrink: 0; margin-top: 3px; }
-
-  /* ---- Checkout card ---- */
-  .ebook-checkout-summary {
-    display: flex; align-items: center; justify-content: space-between; gap: 14px;
-    background: var(--orange-wash); border-radius: 12px; padding: 18px 20px; margin-bottom: 26px; flex-wrap: wrap;
-  }
-  .ebook-checkout-summary strong { font-family: var(--font-display); font-size: 22px; }
+  @keyframes lp-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-12px); } }
 
   @media (max-width: 980px) {
-    .ebook-hero .container { grid-template-columns: 1fr; }
-    .ebook-showcase { order: -1; }
+    .lp-hero { padding: 92px 0 44px; }
+    .lp-hero .container { grid-template-columns: 1fr; gap: 6px; }
+    .lp-cover { order: -1; }
+    .lp-cover img { max-width: 150px; }
+    .lp-hero .eyebrow { margin-bottom: 10px; }
+    .lp-hero h1 { margin-bottom: 12px; }
+    .lp-lede { font-size: 15.5px; margin-bottom: 16px; }
+    .lp-offer { padding: 12px 14px; margin-bottom: 16px; }
+  }
+  @media (max-width: 430px) {
+    .lp-price { font-size: 34px; }
+    .lp-hero .hero-actions .btn { width: 100%; justify-content: center; }
+    .lp-hero .hero-actions .cta-wrap { width: 100%; }
   }
 
-  /* ---- What is Alankaar? (reuses .why-grid / .why-list / .why-item / .why-num
-     from css/style.css — same components as the "Why Unlimited" section on the
-     homepage, just new copy) ---- */
-  #what-is-alankaar .why-grid { padding-top: 90px; }
+  /* ---------- PROBLEM → SOLUTION ---------- */
+  .lp-problem { max-width: 760px; margin: 0 auto; text-align: center; }
+  .lp-problem h2 { font-size: clamp(26px, 3.6vw, 38px); margin-bottom: 14px; }
+  .lp-problem p { font-size: 16.5px; color: var(--ink-soft); }
+  .lp-problem p + p { margin-top: 12px; }
+
+  /* ---------- WHAT'S INSIDE ---------- */
+  .lp-inside { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; align-items: start; }
+  .lp-inside-list { list-style: none; display: flex; flex-direction: column; gap: 14px; }
+  .lp-inside-list li {
+    display: flex; gap: 14px; align-items: flex-start;
+    background: var(--white); border: 1.5px solid var(--line); border-radius: var(--radius); padding: 16px 18px;
+  }
+  .lp-inside-list .num {
+    flex-shrink: 0; width: 34px; height: 34px; border-radius: 50%;
+    background: var(--orange-wash); color: var(--orange-deep);
+    display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 14px;
+  }
+  .lp-inside-list h3 { font-family: var(--font-body); font-size: 15.5px; font-weight: 700; margin-bottom: 3px; }
+  .lp-inside-list p { font-size: 14px; color: var(--ink-soft); }
+  .lp-inside .ebook-preview-card { margin: 0; max-width: none; }
+  @media (max-width: 980px) { .lp-inside { grid-template-columns: 1fr; } .lp-inside .ebook-preview-card { order: -1; } }
 
   /* ---- eBook Preview (new — view-only page viewer) ---- */
   .ebook-preview-card {
@@ -215,14 +184,65 @@ fbq('track', 'PageView');
     .ebook-preview-card { padding: 22px 18px; }
   }
 
-  /* ---- Student Reviews (reuses .review-card / .stars / .review-person /
-     .review-avatar from css/style.css — same components as the homepage
-     reviews section, just laid out as a static grid instead of a scroll-track
-     since there are fewer cards here) ---- */
-  .ebook-review-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; }
-  @media (max-width: 980px) { .ebook-review-grid { grid-template-columns: repeat(2, 1fr); } }
-  @media (max-width: 640px) { .ebook-review-grid { grid-template-columns: 1fr; } }
-  .ebook-review-grid .review-card { min-width: 0; width: 100%; }
+
+  /* ---------- OUTCOMES ---------- */
+  .lp-outcomes { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; }
+  .lp-outcomes .benefit-card { padding: 24px; }
+  @media (max-width: 980px) { .lp-outcomes { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 560px) { .lp-outcomes { grid-template-columns: 1fr; } }
+
+  /* ---------- FIT ---------- */
+  .lp-fit { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; max-width: 900px; margin: 0 auto; }
+  .lp-fit-card { background: var(--white); border: 1.5px solid var(--line); border-radius: var(--radius-lg); padding: 26px; }
+  .lp-fit-card h3 { font-size: 20px; margin-bottom: 12px; }
+  .lp-fit-card ul { list-style: none; display: flex; flex-direction: column; gap: 10px; }
+  .lp-fit-card li { display: flex; gap: 10px; font-size: 14.5px; color: var(--ink-soft); }
+  .lp-fit-card li::before { content: "✓"; color: #1F7A4D; font-weight: 800; flex-shrink: 0; }
+  .lp-fit-card.not li::before { content: "✕"; color: #B4472B; }
+  @media (max-width: 760px) { .lp-fit { grid-template-columns: 1fr; } }
+
+  /* ---------- HOW IT WORKS ---------- */
+  .lp-steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; counter-reset: step; }
+  .lp-step { background: var(--white); border: 1.5px solid var(--line); border-radius: var(--radius-lg); padding: 24px; position: relative; }
+  .lp-step::before {
+    counter-increment: step; content: counter(step);
+    display: flex; align-items: center; justify-content: center;
+    width: 36px; height: 36px; border-radius: 50%; margin-bottom: 12px;
+    background: var(--orange); color: #fff; font-weight: 800;
+  }
+  .lp-step h3 { font-size: 18px; margin-bottom: 6px; }
+  .lp-step p { font-size: 14.5px; color: var(--ink-soft); }
+  @media (max-width: 760px) { .lp-steps { grid-template-columns: 1fr; } }
+
+  /* ---------- CHECKOUT ---------- */
+  .ebook-checkout-summary {
+    display: flex; align-items: center; justify-content: space-between; gap: 14px;
+    background: var(--orange-wash); border-radius: 12px; padding: 16px 18px; margin-bottom: 22px; flex-wrap: wrap;
+  }
+  .ebook-checkout-summary strong { font-family: var(--font-display); font-size: 24px; }
+  .ebook-checkout-summary small { display: block; font-size: 12.5px; color: var(--ink-soft); }
+  .lp-assure { list-style: none; display: grid; grid-template-columns: 1fr 1fr; gap: 8px 14px; margin-top: 16px; font-size: 13px; color: var(--ink-soft); }
+  .lp-assure li { display: flex; gap: 7px; align-items: flex-start; }
+  .lp-assure li::before { content: "✓"; color: var(--orange); font-weight: 800; }
+  @media (max-width: 430px) { .lp-assure { grid-template-columns: 1fr; } }
+  #buy .form-card { max-width: 560px; }
+
+  /* ---------- FAQ (uses .faq-* from css/style.css; native <details>, no JS needed) ---------- */
+  .lp-faq details { border: 1px solid var(--line); border-radius: 12px; background: var(--white); }
+  .lp-faq summary {
+    list-style: none; cursor: pointer; padding: 18px 22px;
+    display: flex; justify-content: space-between; align-items: center; gap: 12px;
+    font-weight: 700; font-size: 15px;
+  }
+  .lp-faq summary::-webkit-details-marker { display: none; }
+  .lp-faq summary::after { content: "+"; font-size: 20px; color: var(--orange); transition: transform 0.25s var(--ease); }
+  .lp-faq details[open] summary::after { transform: rotate(45deg); }
+  .lp-faq details p { padding: 0 22px 18px; font-size: 14.5px; color: var(--ink-soft); }
+
+  /* ---------- STICKY BUY BAR (mobile; uses .sticky-cta from css/style.css) ---------- */
+  .sticky-cta { transition: transform 0.25s var(--ease); }
+  .sticky-cta.is-hidden { transform: translateY(110%); }
+  .sticky-cta .btn { padding: 13px 22px; }
 
   /* ---- Payment recovery popup ----
      Opens ONLY when the customer taps the floating "Payment failed? — Pay
@@ -348,6 +368,7 @@ fbq('track', 'PageView');
     .pr-upi-id { font-size: 15px; }
   }
 
+
   /* ---- Purchase-button notes animation (same as the 30 Raag site) ----
      Small sargam syllables, notes and instruments rise from behind the
      "Get the eBook" buttons and fade out. Decorative only — button colours
@@ -404,150 +425,78 @@ fbq('track', 'PageView');
   <a href="#buy" class="btn btn-primary btn-block">Get the eBook</a>
 </div>
 
-<!-- ============================= EBOOK HERO ============================= -->
-<section class="ebook-hero">
+<!-- ============================= HERO =============================
+     Message-matched to the ads ("stop depending on tutorials / find the
+     notes yourself"). Price, delivery, proof and payment options are all in
+     the first screen. -->
+<section class="lp-hero">
   <div class="container">
-    <div class="ebook-hero-copy reveal">
-      <div class="eyebrow">Digital eBook · Flute Practice</div>
-      <h1>30 Alankaras for Flute</h1>
-      <p class="lede">Build stronger fundamentals. Train your ears. Improve your swar identification and finger speed — with 30 structured alankara exercises you can practice at your own pace.</p>
+    <div class="lp-hero-copy">
+      <div class="eyebrow">Bansuri practice eBook · PDF</div>
+      <h1>Stop depending on a tutorial for <em>every song.</em></h1>
+      <p class="lede lp-lede">30 structured Alankaars — each with Aaroh and Avroh — that train your ear and fingers together, so you can start recognising notes and finding them on your bansuri yourself.</p>
 
-      <div class="ebook-price-block">
-        <div class="ebook-price-main">
-          <span class="ebook-price" data-ebook-price>₹399</span>
-          <span class="ebook-price-original">₹1,299</span>
-        </div>
-        <div class="ebook-price-sub">
-          <span class="ebook-save-badge">You Save ₹900</span>
-          <span class="ebook-access-pill">🔒 Lifetime Access</span>
-        </div>
-        <span class="ebook-countdown" id="ebookCountdown">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>
-          Offer ends in <span class="ebook-countdown-time" id="ebookCountdownTime">01:00:00</span>
+      <div class="lp-offer">
+        <span class="lp-price" data-ebook-price>₹399</span>
+        <span class="lp-offer-facts">
+          <span><strong>One-time payment</strong> · Lifetime access</span>
+          <span>Download link emailed right after payment</span>
         </span>
       </div>
 
       <div class="hero-actions">
         <span class="cta-wrap"><a href="#buy" class="btn btn-primary">Get the eBook — <span data-ebook-price>₹399</span></a></span>
-        <a href="#ebook-preview" class="btn btn-outline">See What's Inside</a>
+        <a href="#inside" class="btn btn-outline">See inside (free preview)</a>
       </div>
 
-      <div class="ebook-trust">
-        <span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>Instant access after payment</span>
-        <span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>Digital PDF, downloadable</span>
-        <span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>No shipping needed</span>
+      <div class="lp-proof"><span class="dot" aria-hidden="true"></span><span><strong>300+ flute learners</strong> have already bought it</span></div>
+      <div class="lp-pay">
+        <span>Pay securely via Razorpay:</span>
+        <img src="assets/payment-badges/upi.png" alt="UPI" loading="lazy">
+        <img src="assets/payment-badges/google-pay.png" alt="Google Pay" loading="lazy">
+        <img src="assets/payment-badges/phonepe.png" alt="PhonePe" loading="lazy">
+        <img src="assets/payment-badges/paytm.png" alt="Paytm" loading="lazy">
       </div>
     </div>
 
-    <div class="ebook-showcase reveal">
-      <div class="ebook-cover-frame">
-        <img id="ebookCoverImg" src="assets/alankaars-ebook-cover.png" alt="30 Alankaras for Flute — eBook cover by The Flute Room">
-      </div>
-      <div class="ebook-ground-shadow" aria-hidden="true"></div>
-    </div>
-  </div>
-</section>
-
-<!-- ============================= WHAT IS ALANKAAR? (new) =============================
-     Reuses the existing .why-grid / .why-list / .why-item / .why-num components
-     (already defined in css/style.css, same as the homepage's "Why Unlimited"
-     section) — no new component styling, just new copy. -->
-<section id="what-is-alankaar">
-  <div class="container why-grid">
-    <div class="reveal">
-      <div class="eyebrow">Getting Started</div>
-      <h2>What is an Alankaar?</h2>
-      <p style="color:var(--ink-soft); margin-top:10px;">
-        An alankaar is a structured sequence of swars (notes) that you practice repeatedly on your flute. Instead of jumping straight into songs, alankaars give you a simple, repeatable pattern to train your fingers and ears together, one step at a time.
-      </p>
-      <p style="color:var(--ink-soft); margin-top:14px;">
-        <strong>30 Alankaras for Flute</strong> brings together 30 such patterns that you can practice progressively, alongside your regular flute practice.
-      </p>
-    </div>
-
-    <div class="why-list reveal-stagger">
-      <div class="why-item">
-        <span class="why-num">01</span>
-        <div>
-          <h4>Finger Coordination &amp; Speed</h4>
-          <p>Repeating a pattern helps build the muscle memory behind smoother, more confident finger movement over time.</p>
-        </div>
-      </div>
-      <div class="why-item">
-        <span class="why-num">02</span>
-        <div>
-          <h4>Smoother Swar Transitions</h4>
-          <p>Regular practice helps your fingers move between notes with less hesitation and more control.</p>
-        </div>
-      </div>
-      <div class="why-item">
-        <span class="why-num">03</span>
-        <div>
-          <h4>Ear Training &amp; Swar Identification</h4>
-          <p>Playing the same patterns often trains your ear to recognize swars, an important part of overall musical understanding.</p>
-        </div>
-      </div>
+    <div class="lp-cover">
+      <img id="ebookCoverImg" src="assets/alankaars-ebook-cover.png" alt="30 Alankaars for Bansuri — eBook cover by The Flute Room" width="360" height="360" fetchpriority="high">
     </div>
   </div>
 </section>
 
-<!-- ============================= WHAT IT HELPS YOU DEVELOP ============================= -->
-<section class="alt" id="benefits-ebook">
+<!-- ============================= PROBLEM → SOLUTION ============================= -->
+<section class="lp alt" id="why">
   <div class="container">
-    <div class="section-head center reveal" style="margin-left:auto;margin-right:auto;">
-      <div class="eyebrow">What You'll Develop</div>
-      <h2>Master the exercises that build real flute control</h2>
-      <p>With 30 structured alankaras, you'll build the fundamentals that make everything else on the flute easier.</p>
-    </div>
-    <div class="ebook-benefit-grid reveal-stagger">
-      <div class="benefit-card">
-        <div class="benefit-icon">🎵</div>
-        <h3>Play Songs by Listening</h3>
-        <p>Train your musical ear so you can listen to a song and gradually work out the notes, instead of depending entirely on written notation.</p>
-      </div>
-      <div class="benefit-card">
-        <div class="benefit-icon">👂</div>
-        <h3>Ear Training</h3>
-        <p>Develop your ability to hear and recognize musical patterns and notes with regular, structured practice.</p>
-      </div>
-      <div class="benefit-card">
-        <div class="benefit-icon">🎯</div>
-        <h3>Swar Identification</h3>
-        <p>Improve your ability to identify swars accurately while listening to music, a core skill for every flute player.</p>
-      </div>
-      <div class="benefit-card">
-        <div class="benefit-icon">⚡</div>
-        <h3>Increased Finger Speed</h3>
-        <p>The structured alankara exercises help develop smoother, faster, and more confident finger movement.</p>
-      </div>
-      <div class="benefit-card">
-        <div class="benefit-icon">🎶</div>
-        <h3>Stronger Musical Foundation</h3>
-        <p>Build better breath control, coordination, note transitions, and overall flute technique — one exercise at a time.</p>
-      </div>
-      <div class="benefit-card">
-        <div class="benefit-icon">💡</div>
-        <h3>Greater Confidence</h3>
-        <p>A clear, repeatable practice structure so you always know exactly what to work on next.</p>
-      </div>
+    <div class="lp-problem reveal">
+      <div class="eyebrow">Why alankaars</div>
+      <h2>Songs get easier when your fundamentals are strong</h2>
+      <p>Learning song after song from notation or videos works — until you want to play something no one has written down. The missing piece is usually not more songs, it's fundamentals: hearing a swar and knowing where your fingers should go.</p>
+      <p>An alankaar is a short, repeating pattern of swars. Practising them every day builds exactly that connection between your ear and your fingers.</p>
     </div>
   </div>
 </section>
 
-<!-- ============================= EBOOK PREVIEW (new) =============================
-     View-only preview built from the pages in the uploaded preview PDF, shown as
-     optimized images (not the PDF itself) so the original file is never linked
-     from the page. Right-click, drag, and pointer events on the image are
-     disabled as a casual-copy deterrent — see js/ebook.js for the note on limits. -->
-<section id="ebook-preview">
+<!-- ============================= WHAT'S INSIDE + PREVIEW =============================
+     The preview viewer keeps the SAME element IDs (ebookPreviewImg,
+     previewCounter, previewPrevBtn, previewNextBtn, .ebook-preview-watermark)
+     so js/ebook.js drives it exactly as before. -->
+<section class="lp" id="inside">
+  <span id="ebook-preview" aria-hidden="true"></span>
   <div class="container">
-    <div class="section-head center reveal" style="margin-left:auto;margin-right:auto;">
-      <div class="eyebrow">Free Preview</div>
-      <h2>Preview the eBook</h2>
-      <p>Take a look inside before you purchase.</p>
+    <div class="section-head center reveal">
+      <div class="eyebrow">What's inside</div>
+      <h2>Everything you need to start practising today</h2>
+      <p>Flip through the free preview pages below.</p>
     </div>
-
-    <div class="ebook-preview-card reveal">
+    <div class="lp-inside">
+      <ul class="lp-inside-list reveal-stagger">
+        <li><span class="num">1</span><div><h3>What an alankaar is — and why it works</h3><p>A short introduction to how alankaars build ear training, finger speed and coordination.</p></div></li>
+        <li><span class="num">2</span><div><h3>Bansuri finger chart</h3><p>Every swar from Sa to upper Sa with open, closed and half-hole positions clearly marked.</p></div></li>
+        <li><span class="num">3</span><div><h3>Notes &amp; octaves on bansuri</h3><p>The full note range across the lower, middle and higher octave, and how breath and lip hole control the octave.</p></div></li>
+        <li><span class="num">4</span><div><h3>30 structured Alankaars</h3><p>Each one written out with its Aaroh (ascending) and Avroh (descending) pattern, in a clear, easy-to-follow layout.</p></div></li>
+      </ul>
+      <div class="ebook-preview-card reveal">
       <div class="ebook-preview-viewer">
         <span class="ebook-preview-badge">Free Preview</span>
         <img id="ebookPreviewImg" src="assets/ebook-preview/alankaar-preview-1.webp" alt="30 Alankaras for Flute — eBook preview page" oncontextmenu="return false;" draggable="false">
@@ -564,114 +513,140 @@ fbq('track', 'PageView');
       </div>
       <p class="ebook-preview-note">Sample pages shown for preview only, this is a view-only preview and not the downloadable eBook.</p>
     </div>
-  </div>
-</section>
 
-<!-- ============================= PRODUCT INFORMATION ============================= -->
-<section id="product-info">
-  <div class="container">
-    <div class="section-head center reveal" style="margin-left:auto;margin-right:auto;">
-      <div class="eyebrow">Product Information</div>
-      <h2>30 Alankaras for Flute</h2>
-    </div>
-    <div class="ebook-info-card reveal">
-      <ul class="ebook-info-list">
-        <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg><span><strong>Format:</strong> Digital eBook (PDF)</span></li>
-        <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg><span><strong>Access:</strong> Lifetime access, no renewals</span></li>
-        <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg><span><strong>Delivery:</strong> Instant access after successful payment</span></li>
-        <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg><span><strong>Downloadable:</strong> Yes, keep it on any device</span></li>
-        <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg><span><strong>Designed for:</strong> Flute learners at every stage</span></li>
-        <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg><span><strong>Price:</strong> <span data-ebook-price>₹399</span></span></li>
-        <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg><span><strong>Shipping:</strong> None — this is a digital product</span></li>
-      </ul>
     </div>
   </div>
 </section>
 
-<!-- ============================= EBOOK STUDENT REVIEWS (new) =============================
-     Reuses the existing .review-card component from css/style.css (same one
-     used on the homepage's Reviews section) — laid out as a static 3-column
-     grid here since there are only a handful of reviews for this product. -->
-<section id="ebook-reviews">
+<!-- ============================= OUTCOMES ============================= -->
+<section class="lp alt" id="benefits-ebook">
   <div class="container">
-    <div class="section-head center reveal" style="margin-left:auto;margin-right:auto;">
-      <div class="eyebrow">Student Reviews</div>
-      <h2>What students are saying</h2>
-      <p>A few notes from students using the eBook alongside their practice.</p>
+    <div class="section-head center reveal">
+      <div class="eyebrow">What you'll develop</div>
+      <h2>Build the skills that make every song easier</h2>
     </div>
-    <div class="ebook-review-grid reveal-stagger">
-      <div class="review-card">
-        <div class="stars">★★★★★</div>
-        <p>"I've been playing casually for a couple of years but always felt shaky moving between notes. Got through the first ten alankaras and my Sa-Re-Ga transitions already feel less clunky. Wish I'd found this earlier."</p>
-        <div class="review-person"><div class="review-avatar">P</div><div><div class="review-name">Priya Nair</div><div class="review-loc">Kochi</div></div></div>
+    <div class="lp-outcomes reveal-stagger">
+      <div class="benefit-card"><div class="benefit-icon">👂</div><h3>Ear training</h3><p>Hear patterns and swars more clearly with regular, structured practice.</p></div>
+      <div class="benefit-card"><div class="benefit-icon">🎯</div><h3>Swar identification</h3><p>Start recognising notes while listening — the first step to playing songs by ear.</p></div>
+      <div class="benefit-card"><div class="benefit-icon">⚡</div><h3>Finger speed &amp; control</h3><p>Smoother, more confident movement between notes, with less hesitation.</p></div>
+      <div class="benefit-card"><div class="benefit-icon">🗓️</div><h3>A clear daily routine</h3><p>Always know what to practise next — one alankaar at a time.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================= IS THIS FOR YOU? ============================= -->
+<section class="lp" id="fit">
+  <div class="container">
+    <div class="section-head center reveal">
+      <div class="eyebrow">Is this for you?</div>
+      <h2>Made for bansuri learners who want stronger basics</h2>
+    </div>
+    <div class="lp-fit reveal-stagger">
+      <div class="lp-fit-card">
+        <h3>This eBook is for you if…</h3>
+        <ul>
+          <li>You play bansuri and want a structured daily practice</li>
+          <li>You rely on notation or tutorials for every new song</li>
+          <li>Your fingers hesitate when moving between notes</li>
+          <li>You want to start finding melodies by ear</li>
+        </ul>
       </div>
-      <div class="review-card">
-        <div class="stars">★★★★☆</div>
-        <p>"Bought it on a whim after seeing an ad, didn't expect much for ₹399. The patterns are laid out clearly and it's easy to follow without a teacher around. Only wish there were a few more advanced ones toward the end."</p>
-        <div class="review-person"><div class="review-avatar">A</div><div><div class="review-name">Arjun Verma</div><div class="review-loc">Lucknow</div></div></div>
-      </div>
-      <div class="review-card">
-        <div class="stars">★★★★★</div>
-        <p>"My son is learning bansuri and his teacher recommended daily alankaar practice. This gives us something structured to work through between his classes. He's slowly getting faster at the ones we've covered so far."</p>
-        <div class="review-person"><div class="review-avatar">M</div><div><div class="review-name">Meenal Joshi</div><div class="review-loc">Nagpur</div></div></div>
-      </div>
-      <div class="review-card">
-        <div class="stars">★★★★★</div>
-        <p>"Simple, no-fuss PDF. I print a couple of pages at a time and keep them on my flute stand. Nothing fancy about it, it just does what it says on the page."</p>
-        <div class="review-person"><div class="review-avatar">D</div><div><div class="review-name">Devansh Rao</div><div class="review-loc">Hyderabad</div></div></div>
-      </div>
-      <div class="review-card">
-        <div class="stars">★★★★★</div>
-        <p>"Was struggling to find swars by ear. A few weeks into these patterns and I can anticipate where my fingers need to go before I've fully thought about it. Still very much a beginner, but this genuinely helped."</p>
-        <div class="review-person"><div class="review-avatar">K</div><div><div class="review-name">Kavya Iyer</div><div class="review-loc">Chennai</div></div></div>
-      </div>
-      <div class="review-card">
-        <div class="stars">★★★★★</div>
-        <p>"Picked this up along with the monthly class plan. My teacher suggested using a couple of pages as warm-up before each session. Good value for what it costs."</p>
-        <div class="review-person"><div class="review-avatar">R</div><div><div class="review-name">Rahul Bhatt</div><div class="review-loc">Jaipur</div></div></div>
+      <div class="lp-fit-card not">
+        <h3>It's not…</h3>
+        <ul>
+          <li>A video course or live classes (see our <a href="index.html#pricing" style="text-decoration:underline;">flute classes</a> for that)</li>
+          <li>A song book — it focuses on fundamentals</li>
+          <li>A printed book — it's a digital PDF, nothing is shipped</li>
+        </ul>
       </div>
     </div>
   </div>
 </section>
 
-<!-- ============================= CHECKOUT ============================= -->
-<section class="alt" id="buy">
+<!-- ============================= HOW IT WORKS ============================= -->
+<section class="lp alt" id="how">
   <div class="container">
-    <div class="section-head center reveal" style="margin-left:auto;margin-right:auto;">
-      <div class="eyebrow">Get Instant Access</div>
+    <div class="section-head center reveal">
+      <div class="eyebrow">How it works</div>
+      <h2>Get it in under 2 minutes</h2>
+    </div>
+    <div class="lp-steps reveal-stagger">
+      <div class="lp-step"><h3>Enter your details</h3><p>Name, email and WhatsApp number — so we know where to send your eBook.</p></div>
+      <div class="lp-step"><h3>Pay <span data-ebook-price>₹399</span></h3><p>Securely through Razorpay with UPI (Google Pay, PhonePe, Paytm), card or netbanking.</p></div>
+      <div class="lp-step"><h3>Get your download link</h3><p>Sent to your email right after payment. Didn't get it? Message us on WhatsApp and we'll resend it.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================= CHECKOUT =============================
+     IDs/names UNCHANGED (ebookForm, fullName, email, whatsapp,
+     ebookSubmitBtn, ebookFormStatus, data-error-for) — js/ebook.js, the
+     Razorpay order, Google Apps Script and Meta Pixel events work as before. -->
+<section class="lp" id="buy">
+  <div class="container">
+    <div class="section-head center reveal">
+      <div class="eyebrow">Get instant access</div>
       <h2>Get the eBook — <span data-ebook-price>₹399</span></h2>
-      <p>Enter your details below — your download link is sent straight to your email right after payment (check Inbox, Promotions and Spam).</p>
+      <p>Your download link is emailed right after payment (check Inbox, Promotions and Spam).</p>
     </div>
 
     <div class="form-card reveal">
       <div class="ebook-checkout-summary">
-        <span>30 Alankaras for Flute · Lifetime Access</span>
-        <strong><span class="ebook-checkout-price-original">₹1,299</span><span data-ebook-price>₹399</span></strong>
+        <span>30 Alankaars for Bansuri<small>PDF eBook · Lifetime access</small></span>
+        <strong><span data-ebook-price>₹399</span></strong>
       </div>
 
       <form id="ebookForm" novalidate>
-        <div class="form-field full" style="margin-bottom:20px;">
+        <div class="form-field full" style="margin-bottom:16px;">
           <label for="fullName">Full Name</label>
-          <input type="text" id="fullName" name="fullName" placeholder="Your full name" required>
+          <input type="text" id="fullName" name="fullName" placeholder="Your full name" autocomplete="name" required>
           <span class="form-error" data-error-for="fullName"></span>
         </div>
-        <div class="form-field full" style="margin-bottom:20px;">
-          <label for="email">Email Address</label>
-          <input type="email" id="email" name="email" placeholder="you@example.com" required>
+        <div class="form-field full" style="margin-bottom:16px;">
+          <label for="email">Email Address <span style="font-weight:500;color:var(--ink-soft);">(your eBook link is sent here)</span></label>
+          <input type="email" id="email" name="email" placeholder="you@example.com" autocomplete="email" inputmode="email" required>
           <span class="form-error" data-error-for="email"></span>
         </div>
         <div class="form-field full" style="margin-bottom:8px;">
           <label for="whatsapp">WhatsApp Number</label>
-          <input type="tel" id="whatsapp" name="whatsapp" placeholder="10-digit mobile number" required>
+          <input type="tel" id="whatsapp" name="whatsapp" placeholder="10-digit mobile number" autocomplete="tel" inputmode="numeric" required>
           <span class="form-error" data-error-for="whatsapp"></span>
         </div>
 
-        <span class="cta-wrap cta-block" style="margin-top:18px;"><button type="submit" class="btn btn-primary btn-block" id="ebookSubmitBtn">Get the eBook — <span data-ebook-price>₹399</span></button></span>
+        <span class="cta-wrap cta-block" style="margin-top:16px;"><button type="submit" class="btn btn-primary btn-block" id="ebookSubmitBtn">Get the eBook — <span data-ebook-price>₹399</span></button></span>
         <div class="form-status" id="ebookFormStatus"></div>
+
+        <ul class="lp-assure">
+          <li>Secure payment via Razorpay</li>
+          <li>UPI, cards &amp; netbanking</li>
+          <li>Link emailed right after payment</li>
+          <li>WhatsApp support if anything goes wrong</li>
+        </ul>
         <p style="font-size:12px;color:var(--ink-soft);text-align:center;margin-top:14px;">
-          By purchasing you agree to our <a href="policies/terms.html" style="text-decoration:underline;">Terms</a> and <a href="policies/refund.html" style="text-decoration:underline;">Refund Policy</a>.
+          By purchasing you agree to our <a href="policies/terms.html" style="text-decoration:underline;">Terms</a> and <a href="policies/refund.html" style="text-decoration:underline;">Refund Policy</a> (digital product — no refunds once paid).
         </p>
       </form>
+    </div>
+  </div>
+</section>
+
+<!-- ============================= FAQ ============================= -->
+<section class="lp alt" id="faq-ebook">
+  <div class="container">
+    <div class="section-head center reveal">
+      <div class="eyebrow">Questions</div>
+      <h2>Frequently asked questions</h2>
+    </div>
+    <div class="faq-list lp-faq">
+      <details><summary>What exactly do I get?</summary><p>A digital PDF eBook with an introduction to alankaars, a bansuri finger chart, a notes &amp; octaves guide and 30 alankaars, each written with Aaroh and Avroh. You can see sample pages in the free preview above.</p></details>
+      <details><summary>How and when will I receive it?</summary><p>Right after a successful payment, the download link is sent to the email address you enter. It usually arrives within a minute or two — please check Inbox, Promotions and Spam. If it hasn't arrived, message us on WhatsApp with your payment details and we'll send it again.</p></details>
+      <details><summary>Can I use it on my phone?</summary><p>Yes. It's a PDF, so you can open it on your phone, tablet or computer, keep it, and print pages if you like.</p></details>
+      <details><summary>Is it a one-time payment?</summary><p>Yes — <span data-ebook-price>₹399</span> once, with lifetime access. There are no subscriptions or renewals.</p></details>
+      <details><summary>My payment failed or got stuck. What should I do?</summary><p>Tap the "Payment failed? — Pay here" button at the bottom of the screen to retry, pay by UPI QR / UPI ID, or message us on WhatsApp. If money was deducted, send us the screenshot and we'll verify it and give you access.</p></details>
+      <details><summary>Can I get a refund?</summary><p>Because it's a digital product delivered instantly, payments are non-refundable once completed. If you have any problem receiving or opening the eBook, we'll fix it — see our <a href="policies/refund.html" style="text-decoration:underline;">Refund Policy</a>.</p></details>
+    </div>
+    <div style="text-align:center;margin-top:36px;">
+      <span class="cta-wrap"><a href="#buy" class="btn btn-primary">Get the eBook — <span data-ebook-price>₹399</span></a></span>
     </div>
   </div>
 </section>
@@ -732,7 +707,7 @@ fbq('track', 'PageView');
     <h3 id="payRecoveryTitle">Payment failed?</h3>
     <p class="pr-lede" id="payRecoveryLede">Don't worry — complete your payment manually using UPI below, or retry the payment.</p>
 
-    <div class="pr-amount">Amount to pay: <span class="pr-price-original">₹1,299</span> <strong data-ebook-price>₹399</strong></div>
+    <div class="pr-amount">Amount to pay: <strong data-ebook-price>₹399</strong></div>
 
     <div class="pr-block">
       <div class="pr-label">Option 1 · Scan &amp; Pay</div>
@@ -816,6 +791,15 @@ fbq('track', 'PageView');
   <span class="label">Questions about the eBook? Chat with us</span>
 </button>
 
+<!-- ============================= STICKY BUY BAR (mobile) =============================
+     Uses the existing .sticky-cta style (shown on screens ≤760px; css/style.css
+     already reserves space for it and lifts the WhatsApp button above it).
+     Hidden while the hero buttons or the checkout form are on screen. -->
+<div class="sticky-cta is-hidden" id="stickyCta" aria-hidden="true">
+  <div class="price-tag">30 Alankaars eBook<strong><span data-ebook-price>₹399</span> · Lifetime</strong></div>
+  <a href="#buy" class="btn btn-primary">Get the eBook</a>
+</div>
+
 <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
 <script src="js/checkout-loading.js" defer></script>
 <script src="js/ebook.js" defer></script>
@@ -854,54 +838,24 @@ fbq('track', 'PageView');
 })();
 </script>
 
-<!-- ============ OFFER COUNTDOWN TIMER ============
-     Fully self-contained — does not touch config.js, ebook.js, the form,
-     Razorpay, or Meta Pixel. Uses its own localStorage key so it can never
-     collide with the eBook success-page keys (tfr_ebook_success_payload,
-     tfr_ebook_purchase_fired_*).
-
-     Behavior: on first visit, sets a 1-hour target end time and stores it.
-     On every later visit/refresh, reads that same stored end time, so the
-     countdown keeps going down correctly instead of resetting to 01:00:00.
-     Once it hits 00:00:00, it automatically starts a fresh 1-hour countdown
-     and repeats indefinitely. -->
 <script>
+/* Sticky buy bar visibility — self-contained, touches nothing else. */
 (function () {
-  var STORAGE_KEY = "tfr_ebook_offer_end";
-  var DURATION_MS = 60 * 60 * 1000; // 1-hour loop
-
-  function getEndTime() {
-    var stored = parseInt(localStorage.getItem(STORAGE_KEY), 10);
-    // also resets an old 24-hour end time saved in the visitor's browser
-    if (!stored || isNaN(stored) || stored <= Date.now() || stored - Date.now() > DURATION_MS) {
-      stored = Date.now() + DURATION_MS;
-      localStorage.setItem(STORAGE_KEY, String(stored));
+  function start() {
+    var bar = document.getElementById("stickyCta");
+    var hero = document.querySelector(".lp-hero .hero-actions");
+    var buy = document.getElementById("buy");
+    if (!bar || !hero || !buy || !("IntersectionObserver" in window)) { if (bar) bar.classList.remove("is-hidden"); return; }
+    var heroVisible = true, buyVisible = false;
+    function update() {
+      var hide = heroVisible || buyVisible;
+      bar.classList.toggle("is-hidden", hide);
+      bar.setAttribute("aria-hidden", hide ? "true" : "false");
     }
-    return stored;
+    new IntersectionObserver(function (e) { heroVisible = e[0].isIntersecting; update(); }).observe(hero);
+    new IntersectionObserver(function (e) { buyVisible = e[0].isIntersecting; update(); }, { threshold: 0.05 }).observe(buy);
   }
-
-  var endTime = getEndTime();
-  var timeEl = document.getElementById("ebookCountdownTime");
-  if (!timeEl) return;
-
-  function pad(n) { return n < 10 ? "0" + n : String(n); }
-
-  function tick() {
-    var remaining = endTime - Date.now();
-    if (remaining <= 0) {
-      endTime = Date.now() + DURATION_MS;
-      localStorage.setItem(STORAGE_KEY, String(endTime));
-      remaining = DURATION_MS;
-    }
-    var totalSeconds = Math.floor(remaining / 1000);
-    var h = Math.floor(totalSeconds / 3600);
-    var m = Math.floor((totalSeconds % 3600) / 60);
-    var s = totalSeconds % 60;
-    timeEl.textContent = pad(h) + ":" + pad(m) + ":" + pad(s);
-  }
-
-  tick();
-  setInterval(tick, 1000);
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start); else start();
 })();
 </script>
 </body>
