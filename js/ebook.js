@@ -196,6 +196,60 @@ document.addEventListener("DOMContentLoaded", () => {
     formStatus.style.color = color || "var(--ink-soft)";
   }
 
+  /* ============ INLINE "PAY ANOTHER WAY" HELP (new) ============
+     Most failed payments are UPI timeouts: the customer is sent to their UPI
+     app and never approves in time, then leaves. This shows a small box
+     right under the buy button — only AFTER Razorpay reports a failure or
+     the customer closes the payment window without paying — with one button
+     that opens the EXISTING "Payment failed? — Pay here" popup (QR / UPI ID /
+     retry). It never opens the popup by itself, never touches the order,
+     Razorpay, Apps Script or Meta Pixel, and every step is wrapped in
+     try/catch so it can never break checkout. */
+  let payHelpEl = null;
+  function showPayHelp(kind) {
+    try {
+      if (completed || !formStatus || !document.getElementById("payRecovery")) return;
+      if (!payHelpEl) {
+        payHelpEl = document.createElement("div");
+        payHelpEl.id = "ebookPayHelp";
+        payHelpEl.setAttribute("role", "status");
+        payHelpEl.style.cssText = "margin-top:14px;padding:14px 16px;border-radius:12px;background:#FFF3E8;border:1.5px solid #FFC999;text-align:left;font-size:14px;color:#3A3A3A;";
+        const title = document.createElement("strong");
+        title.style.cssText = "display:block;color:#111;margin-bottom:4px;font-size:14.5px;";
+        const text = document.createElement("span");
+        text.style.cssText = "display:block;";
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "btn btn-primary btn-block";
+        btn.style.cssText = "margin-top:12px;";
+        btn.textContent = "Pay by QR / UPI ID instead";
+        btn.addEventListener("click", function () {
+          try { showRecovery(); } catch (e) { /* ignore */ }
+        });
+        payHelpEl.appendChild(title);
+        payHelpEl.appendChild(text);
+        payHelpEl.appendChild(btn);
+        formStatus.insertAdjacentElement("afterend", payHelpEl);
+      }
+      const t = payHelpEl.children[0], x = payHelpEl.children[1];
+      if (kind === "timeout") {
+        t.textContent = "UPI app didn't open, or the payment timed out?";
+        x.textContent = "Tap the orange button above to try again, or pay the same ₹" + EBOOK_CONFIG.EBOOK_PRICE + " by scanning our QR code or using our UPI ID.";
+      } else if (kind === "failed") {
+        t.textContent = "Your payment didn't go through.";
+        x.textContent = "Try again with a different UPI app or method, or pay the same ₹" + EBOOK_CONFIG.EBOOK_PRICE + " by scanning our QR code or using our UPI ID.";
+      } else {
+        t.textContent = "Having trouble paying?";
+        x.textContent = "You can also pay ₹" + EBOOK_CONFIG.EBOOK_PRICE + " by scanning our QR code or using our UPI ID — then send us the screenshot on WhatsApp.";
+      }
+      payHelpEl.style.display = "block";
+      if (typeof queuePlace === "function") queuePlace();
+    } catch (e) { /* visual only — never affect checkout */ }
+  }
+  function hidePayHelp() {
+    try { if (payHelpEl) payHelpEl.style.display = "none"; } catch (e) { /* ignore */ }
+  }
+
   /* ============ META EMQ HELPERS ============ */
   function getCookie(name) {
     const match = document.cookie.match(new RegExp("(^| )" + name + "=([^;]+)"));
@@ -341,6 +395,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     submitting = true;
+    hidePayHelp();
     try {
       // ---- Meta Pixel (Advanced Matching + Lead + InitiateCheckout).
       // Wrapped so a broken/blocked Pixel can NEVER stop checkout opening. ----
@@ -441,6 +496,7 @@ document.addEventListener("DOMContentLoaded", () => {
   let completed = false;
 
   let failedThisOpen = false;
+  let lastFailKind = "";
 
   // Loads Razorpay's checkout.js again if the <script> tag in the page failed
   // (weak network / blocked). Resolves true/false, never hangs (8 s cap).
@@ -478,6 +534,7 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
     failedThisOpen = false;
+    lastFailKind = "";
     const phoneDigits = String(data.whatsapp || "").replace(/\D/g, "").slice(-10);
 
     const options = {
@@ -522,9 +579,11 @@ document.addEventListener("DOMContentLoaded", () => {
           resetButton();
           if (failedThisOpen) {
             setStatus("Payment failed. Tap the button to try again — or use “Payment failed? — Pay here” to pay by UPI.", "#C0392B");
+            showPayHelp(lastFailKind || "failed");
           } else {
             // Closing Razorpay is NOT treated as a failed payment.
             setStatus("Payment was not completed. You can try again anytime.");
+            showPayHelp("closed");
           }
           // A UPI payment can still complete a little AFTER the popup is
           // closed (customer approved in the app, came back, closed the
@@ -549,6 +608,8 @@ document.addEventListener("DOMContentLoaded", () => {
         console.warn("Razorpay payment failed:", err.code, err.reason, err.description);
         resetButton();
         setStatus("Payment failed. Tap the button to try again — or use “Payment failed? — Pay here” to pay by UPI.", "#C0392B");
+        lastFailKind = /timed?_?out|time/i.test(String(err.reason || "") + " " + String(err.description || "")) ? "timeout" : "failed";
+        showPayHelp(lastFailKind);
       });
       rzp.open();
       loadingScreen(false); // Razorpay is open — stop the button countdown immediately
@@ -572,6 +633,7 @@ document.addEventListener("DOMContentLoaded", () => {
     loadingScreen(false);
     stopStatusPoll();
     hideRecovery(false);
+    hidePayHelp();
 
     if (via !== "handler") {
       setStatus("We found your completed payment — taking you to your eBook…", "#1F7A4D");
@@ -811,9 +873,13 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     }
     const f = helpFloat.getBoundingClientRect();
-    const b = submitBtn.getBoundingClientRect();
-    const overlaps = !(f.right < b.left || f.left > b.right || f.bottom < b.top || f.top > b.bottom);
-    helpFloat.classList.toggle("is-tucked", overlaps && b.height > 0);
+    const hits = el => {
+      if (!el) return false;
+      const b = el.getBoundingClientRect();
+      return b.height > 0 && !(f.right < b.left || f.left > b.right || f.bottom < b.top || f.top > b.bottom);
+    };
+    // Also tuck it away while it would cover the inline "pay another way" box.
+    helpFloat.classList.toggle("is-tucked", hits(submitBtn) || hits(payHelpEl));
   }
   let placeQueued = false;
   function queuePlace() {
