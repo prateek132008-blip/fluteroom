@@ -87,6 +87,9 @@ fbq('track', 'PageView');
     padding: 14px 18px; margin-bottom: 20px; max-width: 520px; box-shadow: var(--shadow-soft);
   }
   .lp-price { font-family: var(--font-display); font-size: 40px; font-weight: 700; line-height: 1; color: var(--ink); }
+  .lp-mrp { font-family: var(--font-body); font-weight: 600; color: var(--ink-soft); text-decoration: line-through; text-decoration-thickness: 1.5px; opacity: 0.75; white-space: nowrap; }
+  .lp-price-wrap { display: inline-flex; align-items: baseline; gap: 10px; }
+  .lp-price-wrap .lp-mrp { font-size: 18px; }
   .lp-offer-facts { display: flex; flex-direction: column; gap: 2px; font-size: 13.5px; color: var(--ink-soft); }
   .lp-offer-facts strong { color: var(--ink); }
   .lp-hero .hero-actions { margin-bottom: 18px; }
@@ -449,7 +452,7 @@ fbq('track', 'PageView');
       <p class="lede lp-lede">30 structured Alankaars — each with Aaroh and Avroh — that train your ear and fingers together, so you can start recognising notes and finding them on your bansuri yourself.</p>
 
       <div class="lp-offer">
-        <span class="lp-price" data-ebook-price>₹399</span>
+        <span class="lp-price-wrap"><span class="lp-price" data-ebook-price>₹399</span><span class="lp-mrp" aria-label="Regular price ₹1,099">₹1,099</span></span>
         <span class="lp-offer-facts">
           <span><strong>One-time payment</strong> · Lifetime access</span>
           <span>Download link emailed right after payment</span>
@@ -651,7 +654,7 @@ fbq('track', 'PageView');
     <div class="form-card reveal">
       <div class="ebook-checkout-summary">
         <span>30 Alankaars for Bansuri<small>PDF eBook · Lifetime access</small></span>
-        <strong><span data-ebook-price>₹399</span></strong>
+        <strong><span class="lp-mrp" style="font-size:15px;margin-right:8px;" aria-label="Regular price ₹1,099">₹1,099</span><span data-ebook-price>₹399</span></strong>
       </div>
 
       <form id="ebookForm" novalidate>
@@ -765,7 +768,7 @@ fbq('track', 'PageView');
     <h3 id="payRecoveryTitle">Payment failed?</h3>
     <p class="pr-lede" id="payRecoveryLede">Don't worry — complete your payment manually using UPI below, or retry the payment.</p>
 
-    <div class="pr-amount">Amount to pay: <strong data-ebook-price>₹399</strong></div>
+    <div class="pr-amount">Amount to pay: <span class="pr-price-original">₹1,099</span> <strong data-ebook-price>₹399</strong></div>
 
     <div class="pr-block">
       <div class="pr-label">Option 1 · Scan &amp; Pay</div>
@@ -854,7 +857,7 @@ fbq('track', 'PageView');
      already reserves space for it and lifts the WhatsApp button above it).
      Hidden while the hero buttons or the checkout form are on screen. -->
 <div class="sticky-cta is-hidden" id="stickyCta" aria-hidden="true">
-  <div class="price-tag">30 Alankaars eBook<strong><span data-ebook-price>₹399</span> · Lifetime</strong></div>
+  <div class="price-tag">30 Alankaars eBook<strong><span class="lp-mrp" style="font-size:13px;margin-right:6px;">₹1,099</span><span data-ebook-price>₹399</span> · Lifetime</strong></div>
   <a href="#buy" class="btn btn-primary">Get the eBook</a>
 </div>
 
