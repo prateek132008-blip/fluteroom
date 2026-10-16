@@ -91,7 +91,10 @@ fbq('track', 'PageView');
   .lp-offer-facts strong { color: var(--ink); }
   .lp-hero .hero-actions { margin-bottom: 18px; }
   .lp-proof { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 13.5px; color: var(--ink-soft); }
-  .lp-proof .dot { width: 8px; height: 8px; border-radius: 50%; background: #1F9D55; box-shadow: 0 0 0 4px rgba(31,157,85,0.15); }
+  .lp-proof .dot { position: relative; width: 9px; height: 9px; border-radius: 50%; background: #1F9D55; flex-shrink: 0; animation: lp-blink 1.4s ease-in-out infinite; }
+  .lp-proof .dot::after { content: ""; position: absolute; inset: -5px; border-radius: 50%; border: 2px solid rgba(31,157,85,0.55); animation: lp-ping 1.4s ease-out infinite; }
+  @keyframes lp-blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+  @keyframes lp-ping { 0% { transform: scale(0.6); opacity: 0.9; } 100% { transform: scale(1.6); opacity: 0; } }
   .lp-pay { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 14px; font-size: 12.5px; color: var(--ink-soft); }
   .lp-pay img { height: 22px; width: auto; }
 
@@ -101,7 +104,7 @@ fbq('track', 'PageView');
     background: radial-gradient(closest-side, rgba(255,122,0,0.20), transparent 72%); filter: blur(30px);
   }
   .lp-cover img {
-    position: relative; width: 100%; max-width: 360px; height: auto;
+    position: relative; width: 100%; max-width: 440px; height: auto;
     filter: drop-shadow(0 22px 18px rgba(17,17,17,0.25)) drop-shadow(0 6px 8px rgba(17,17,17,0.18));
     animation: lp-float 4.5s ease-in-out infinite;
   }
@@ -111,7 +114,7 @@ fbq('track', 'PageView');
     .lp-hero { padding: 92px 0 44px; }
     .lp-hero .container { grid-template-columns: 1fr; gap: 6px; }
     .lp-cover { order: -1; }
-    .lp-cover img { max-width: 150px; }
+    .lp-cover img { max-width: 240px; }
     .lp-hero .eyebrow { margin-bottom: 10px; }
     .lp-hero h1 { margin-bottom: 12px; }
     .lp-lede { font-size: 15.5px; margin-bottom: 16px; }
@@ -213,6 +216,15 @@ fbq('track', 'PageView');
   .lp-step h3 { font-size: 18px; margin-bottom: 6px; }
   .lp-step p { font-size: 14.5px; color: var(--ink-soft); }
   @media (max-width: 760px) { .lp-steps { grid-template-columns: 1fr; } }
+
+  /* ---- Student Reviews (reuses .review-card / .stars / .review-person /
+     .review-avatar from css/style.css — same components as the homepage
+     reviews section, just laid out as a static grid instead of a scroll-track
+     since there are fewer cards here) ---- */
+  .ebook-review-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; }
+  @media (max-width: 980px) { .ebook-review-grid { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 640px) { .ebook-review-grid { grid-template-columns: 1fr; } }
+  .ebook-review-grid .review-card { min-width: 0; width: 100%; }
 
   /* ---------- CHECKOUT ---------- */
   .ebook-checkout-summary {
@@ -449,7 +461,7 @@ fbq('track', 'PageView');
         <a href="#inside" class="btn btn-outline">See inside (free preview)</a>
       </div>
 
-      <div class="lp-proof"><span class="dot" aria-hidden="true"></span><span><strong>300+ flute learners</strong> have already bought it</span></div>
+      <div class="lp-proof"><span class="dot" aria-hidden="true"></span><span><strong>300+ music learners</strong> have already bought it</span></div>
       <div class="lp-pay">
         <span>Pay securely via Razorpay:</span>
         <img src="assets/payment-badges/upi.png" alt="UPI" loading="lazy">
@@ -460,7 +472,7 @@ fbq('track', 'PageView');
     </div>
 
     <div class="lp-cover">
-      <img id="ebookCoverImg" src="assets/alankaars-ebook-cover.png" alt="30 Alankaars for Bansuri — eBook cover by The Flute Room" width="360" height="360" fetchpriority="high">
+      <img id="ebookCoverImg" src="assets/alankaars-ebook-cover.png" alt="30 Alankaars for Bansuri — eBook cover by The Flute Room" width="440" height="440" fetchpriority="high">
     </div>
   </div>
 </section>
@@ -574,6 +586,52 @@ fbq('track', 'PageView');
       <div class="lp-step"><h3>Enter your details</h3><p>Name, email and WhatsApp number — so we know where to send your eBook.</p></div>
       <div class="lp-step"><h3>Pay <span data-ebook-price>₹399</span></h3><p>Securely through Razorpay with UPI (Google Pay, PhonePe, Paytm), card or netbanking.</p></div>
       <div class="lp-step"><h3>Get your download link</h3><p>Sent to your email right after payment. Didn't get it? Message us on WhatsApp and we'll resend it.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================= EBOOK STUDENT REVIEWS (new) =============================
+     Reuses the existing .review-card component from css/style.css (same one
+     used on the homepage's Reviews section) — laid out as a static 3-column
+     grid here since there are only a handful of reviews for this product. -->
+<section class="lp" id="ebook-reviews">
+  <div class="container">
+    <div class="section-head center reveal" style="margin-left:auto;margin-right:auto;">
+      <div class="eyebrow">Student Reviews</div>
+      <h2>What students are saying</h2>
+      <p>A few notes from students using the eBook alongside their practice.</p>
+    </div>
+    <div class="ebook-review-grid reveal-stagger">
+      <div class="review-card">
+        <div class="stars">★★★★★</div>
+        <p>"I've been playing casually for a couple of years but always felt shaky moving between notes. Got through the first ten alankaras and my Sa-Re-Ga transitions already feel less clunky. Wish I'd found this earlier."</p>
+        <div class="review-person"><div class="review-avatar">P</div><div><div class="review-name">Priya Nair</div><div class="review-loc">Kochi</div></div></div>
+      </div>
+      <div class="review-card">
+        <div class="stars">★★★★☆</div>
+        <p>"Bought it on a whim after seeing an ad, didn't expect much for ₹399. The patterns are laid out clearly and it's easy to follow without a teacher around. Only wish there were a few more advanced ones toward the end."</p>
+        <div class="review-person"><div class="review-avatar">A</div><div><div class="review-name">Arjun Verma</div><div class="review-loc">Lucknow</div></div></div>
+      </div>
+      <div class="review-card">
+        <div class="stars">★★★★★</div>
+        <p>"My son is learning bansuri and his teacher recommended daily alankaar practice. This gives us something structured to work through between his classes. He's slowly getting faster at the ones we've covered so far."</p>
+        <div class="review-person"><div class="review-avatar">M</div><div><div class="review-name">Meenal Joshi</div><div class="review-loc">Nagpur</div></div></div>
+      </div>
+      <div class="review-card">
+        <div class="stars">★★★★★</div>
+        <p>"Simple, no-fuss PDF. I print a couple of pages at a time and keep them on my flute stand. Nothing fancy about it, it just does what it says on the page."</p>
+        <div class="review-person"><div class="review-avatar">D</div><div><div class="review-name">Devansh Rao</div><div class="review-loc">Hyderabad</div></div></div>
+      </div>
+      <div class="review-card">
+        <div class="stars">★★★★★</div>
+        <p>"Was struggling to find swars by ear. A few weeks into these patterns and I can anticipate where my fingers need to go before I've fully thought about it. Still very much a beginner, but this genuinely helped."</p>
+        <div class="review-person"><div class="review-avatar">K</div><div><div class="review-name">Kavya Iyer</div><div class="review-loc">Chennai</div></div></div>
+      </div>
+      <div class="review-card">
+        <div class="stars">★★★★★</div>
+        <p>"Picked this up along with the monthly class plan. My teacher suggested using a couple of pages as warm-up before each session. Good value for what it costs."</p>
+        <div class="review-person"><div class="review-avatar">R</div><div><div class="review-name">Rahul Bhatt</div><div class="review-loc">Jaipur</div></div></div>
+      </div>
     </div>
   </div>
 </section>
